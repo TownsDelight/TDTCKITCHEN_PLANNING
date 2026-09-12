@@ -2055,6 +2055,7 @@ function initApp(){
   const PACKAGES_KEY = 'kitchen-packages';
   const INVENTORY_KEY = 'kitchen-inventory';
   const BATCH_COUNTER_KEY = 'kitchen-batch-counter';
+  const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbx28pPeQ-tnYwpgrAxFmqxG9wfSk_tFkQBQwqs5UDNd40drLR7mKw9pOXPTjaV_WidW7Q/exec";
   const UOMS = ['kg','g','L','mL','pcs','pack','can','box','dozen','bundle'];
 
   let recipes = [];
@@ -2080,23 +2081,30 @@ function initApp(){
     renderProcurement();
   }
 
-  async function persistRecipes(){
-    try{
-      await window.storage.set(STORAGE_KEY, JSON.stringify(recipes), false);
-    }catch(e){
-      console.error('Storage error', e);
+async function persistRecipes(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      fetch(GOOGLE_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveRecipes", data: recipes })
+      });
     }
+  }catch(e){
+    console.error('Storage error', e);
   }
-
-  async function loadPlans(){
-    try{
-      const res = await window.storage.get(PLANS_KEY, false);
-      plans = res && res.value ? JSON.parse(res.value) : [];
-    }catch(e){
-      plans = [];
-    }
-    renderProductionList();
+}
+async function loadPlans(){
+  try{
+    const res = localStorage.getItem(PLANS_KEY);
+    plans = res ? JSON.parse(res) : [];
+  }catch(e){
+    plans = [];
   }
+  renderProductionList();
+}
 
   async function persistPlans(){
     try{
