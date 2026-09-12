@@ -2143,13 +2143,21 @@ async function loadPlans(){
     renderInventoryTable();
   }
 
-  async function persistInventory(){
-    try{
-      await window.storage.set(INVENTORY_KEY, JSON.stringify(inventory), false);
-    }catch(e){
-      console.error('Storage error', e);
+async function persistInventory(){
+  try{
+    localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      fetch(GOOGLE_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveInventory", data: inventory })
+      });
     }
+  }catch(e){
+    console.error('Storage error', e);
   }
+}
 
   async function loadBatchCounter(){
     try{
