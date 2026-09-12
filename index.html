@@ -2250,7 +2250,7 @@ async function persistInventoryHistory(){
     }
   }catch(e){ console.error('Storage error', e); }
 }
-  function formatBatchNumber(date, n){
+ function formatBatchNumber(date, n){
   const d = date ? new Date(date) : new Date();
   const monthAbbr = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
   return `${monthAbbr}${n}`;
