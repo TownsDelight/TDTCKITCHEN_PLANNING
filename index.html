@@ -2057,7 +2057,8 @@ function initApp(){
   const BATCH_COUNTER_KEY = 'kitchen-batch-counter';
   const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwezR-b95OrwkPJ12G0xQsp-lvZ_Ki7dWe4-J4B-oHMkF4UWbgsD1p7I6cx0aSAmJzbPA/exec";
   const UOMS = ['kg','g','L','mL','pcs','pack','can','box','dozen','bundle'];
-
+  const BATCH_KEY = BATCH_COUNTER_KEY;
+  
   let recipes = [];
   let plans = [];
   let packages = [];
@@ -2248,6 +2249,39 @@ async function persistInventoryHistory(){
       });
     }
   }catch(e){ console.error('Storage error', e); }
+}
+  function formatBatchNumber(date, n){
+  const d = date ? new Date(date) : new Date();
+  const monthAbbr = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+  return `${monthAbbr}${n}`;
+}
+
+async function loadPlans(){
+  try{
+    const res = localStorage.getItem(PLANS_KEY);
+    plans = res ? JSON.parse(res) : [];
+  }catch(e){
+    plans = [];
+  }
+  if (typeof renderPlans === 'function') {
+    renderPlans();
+  }
+}
+
+async function persistPlans(){
+  try{
+    localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      fetch(GOOGLE_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "savePlans", data: plans })
+      });
+    }
+  }catch(e){
+    console.error('Storage error', e);
+  }
 }
 
   function logInventoryChange(itemName, uom, oldQty, newQty, reason){
