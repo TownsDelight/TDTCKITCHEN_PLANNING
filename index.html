@@ -2106,42 +2106,57 @@ async function loadPlans(){
   renderProductionList();
 }
 
-  async function persistPlans(){
-    try{
-      await window.storage.set(PLANS_KEY, JSON.stringify(plans), false);
-    }catch(e){
-      console.error('Storage error', e);
+async function persistPlans(){
+  try{
+    localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      fetch(GOOGLE_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "savePlans", data: plans })
+      });
     }
+  }catch(e){
+    console.error('Storage error', e);
   }
+}
 
-  async function loadPackages(){
-    try{
-      const res = await window.storage.get(PACKAGES_KEY, false);
-      packages = res && res.value ? JSON.parse(res.value) : [];
-    }catch(e){
-      packages = [];
-    }
-    renderPackageList();
+async function loadPackages(){
+  try{
+    const res = localStorage.getItem(PACKAGES_KEY);
+    packages = res ? JSON.parse(res) : [];
+  }catch(e){
+    packages = [];
   }
+  renderPackageList();
+}
 
-  async function persistPackages(){
-    try{
-      await window.storage.set(PACKAGES_KEY, JSON.stringify(packages), false);
-    }catch(e){
-      console.error('Storage error', e);
+async function persistPackages(){
+  try{
+    localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      fetch(GOOGLE_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "savePackages", data: packages })
+      });
     }
+  }catch(e){
+    console.error('Storage error', e);
   }
+}
 
-  async function loadInventory(){
-    try{
-      const res = await window.storage.get(INVENTORY_KEY, false);
-      inventory = res && res.value ? JSON.parse(res.value) : [];
-    }catch(e){
-      inventory = [];
-    }
-    syncInventoryFromRecipes();
-    renderInventoryTable();
+async function loadInventory(){
+  try{
+    const res = localStorage.getItem(INVENTORY_KEY);
+    inventory = res ? JSON.parse(res) : [];
+  }catch(e){
+    inventory = [];
   }
+  renderInventory();
+}
 
 async function persistInventory(){
   try{
