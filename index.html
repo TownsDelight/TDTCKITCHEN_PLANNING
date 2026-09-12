@@ -2178,6 +2178,7 @@ async function persistPackages(){
     }
   }catch(e){ console.error('Storage error', e); }
 }
+  
 async function loadInventory(){
   try{
     const res = localStorage.getItem(INVENTORY_KEY);
@@ -2223,6 +2224,18 @@ async function loadBatchCounter(){
   }
 }
 
+async function loadInventoryHistory(){
+  try{
+    const res = localStorage.getItem(INV_HIST_KEY);
+    inventoryHistory = res ? JSON.parse(res) : [];
+  }catch(e){
+    inventoryHistory = [];
+  }
+  if (typeof renderHistoryPanel === 'function') {
+    renderHistoryPanel();
+  }
+}
+
 async function persistInventoryHistory(){
   try{
     localStorage.setItem(INV_HIST_KEY, JSON.stringify(inventoryHistory));
@@ -2236,7 +2249,6 @@ async function persistInventoryHistory(){
     }
   }catch(e){ console.error('Storage error', e); }
 }
-
 
   function logInventoryChange(itemName, uom, oldQty, newQty, reason){
     inventoryHistory.unshift({
