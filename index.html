@@ -2055,7 +2055,7 @@ function initApp(){
   const PACKAGES_KEY = 'kitchen-packages';
   const INVENTORY_KEY = 'kitchen-inventory';
   const BATCH_COUNTER_KEY = 'kitchen-batch-counter';
-  const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbzbcvK10ib0813JFyh6e7NcqKmA0j-vm5FMP1kWpH9ACZncqxW9CrNHkDCXH4AcWfh34w/exec";
+  const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwezR-b95OrwkPJ12G0xQsp-lvZ_Ki7dWe4-J4B-oHMkF4UWbgsD1p7I6cx0aSAmJzbPA/exec";
   const UOMS = ['kg','g','L','mL','pcs','pack','can','box','dozen','bundle'];
 
   let recipes = [];
@@ -2069,17 +2069,39 @@ function initApp(){
   let editingProdId = null;
   let editingPkgId = null;
 
-  // ---------- Storage ----------
-  async function loadRecipes(){
-    try{
-      const res = await window.storage.get(STORAGE_KEY, false);
-      recipes = res && res.value ? JSON.parse(res.value) : [];
-    }catch(e){
-      recipes = [];
-    }
-    renderRecipeList();
-    renderProcurement();
+async function syncFromGoogleSheets() {
+  if (typeof GOOGLE_SHEET_URL === 'undefined' || !GOOGLE_SHEET_URL) return;
+  try {
+    const res = await fetch(GOOGLE_SHEET_URL);
+    const db = await res.json();
+    
+    if (db.recipes && db.recipes !== "[]") localStorage.setItem(STORAGE_KEY, db.recipes);
+    if (db.inventory && db.inventory !== "[]") localStorage.setItem(INVENTORY_KEY, db.inventory);
+    if (db.packages && db.packages !== "[]") localStorage.setItem(PACKAGES_KEY, db.packages);
+    if (db.production_plans && db.production_plans !== "[]") localStorage.setItem(PLANS_KEY, db.production_plans);
+
+    if (typeof loadRecipes === 'function') loadRecipes();
+    if (typeof loadInventory === 'function') loadInventory();
+    if (typeof loadPackages === 'function') loadPackages();
+    if (typeof loadPlans === 'function') loadPlans();
+  } catch (e) {
+    console.error('Failed to sync from Google Sheets:', e);
   }
+}
+
+window.addEventListener('DOMContentLoaded', syncFromGoogleSheets);
+  
+  // ---------- Storage ----------
+ async function loadRecipes(){
+  try{
+    const res = localStorage.getItem(STORAGE_KEY);
+    recipes = res ? JSON.parse(res) : [];
+  }catch(e){
+    recipes = [];
+  }
+  renderRecipeList();
+  renderProcurement();
+}
 
 async function persistRecipes(){
   try{
@@ -2096,16 +2118,6 @@ async function persistRecipes(){
     console.error('Storage error', e);
   }
 }
-async function loadPlans(){
-  try{
-    const res = localStorage.getItem(PLANS_KEY);
-    plans = res ? JSON.parse(res) : [];
-  }catch(e){
-    plans = [];
-  }
-  renderProductionList();
-}
-
 async function persistPlans(){
   try{
     localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
@@ -2117,9 +2129,7 @@ async function persistPlans(){
         body: JSON.stringify({ action: "savePlans", data: plans })
       });
     }
-  }catch(e){
-    console.error('Storage error', e);
-  }
+  }catch(e){ console.error('Storage error', e); }
 }
 
 async function loadPackages(){
@@ -2147,49 +2157,41 @@ async function persistPackages(){
     console.error('Storage error', e);
   }
 }
-
-async function loadInventory(){
+async function loadPackages(){
   try{
-    const res = localStorage.getItem(INVENTORY_KEY);
-    inventory = res ? JSON.parse(res) : [];
-  }catch(e){
-    inventory = [];
-  }
-  renderInventory();
+    const res = localStorage.getItem(PACKAGES_KEY);
+    packages = res ? JSON.parse(res) : [];
+  }catch(e){ packages = []; }
+  renderPackageList();
 }
 
-async function persistInventory(){
+async function persistPackages(){
   try{
-    localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+    localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
     if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
       fetch(GOOGLE_SHEET_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveInventory", data: inventory })
+        body: JSON.stringify({ action: "savePackages", data: packages })
       });
     }
-  }catch(e){
-    console.error('Storage error', e);
-  }
+  }catch(e){ console.error('Storage error', e); }
 }
 
-  async function loadBatchCounter(){
-    try{
-      const res = await window.storage.get(BATCH_COUNTER_KEY, false);
-      batchCounter = res && res.value ? (parseInt(JSON.parse(res.value), 10) || 0) : 0;
-    }catch(e){
-      batchCounter = 0;
-    }
-  }
+async function loadInventory(){
+  try{
+    const res = localStorage.getItem(INVENTORY_KEY);
+    inventory = res ? JSON.parse(res) : [];
+  }catch(e){ inventory = []; }
+  renderInventory();
+}
 
-  async function persistBatchCounter(){
-    try{
-      await window.storage.set(BATCH_COUNTER_KEY, JSON.stringify(batchCounter), false);
-    }catch(e){
-      console.error('Storage error', e);
-    }
-  }
+async function persistBatchCounter(){
+  try{
+    localStorage.setItem(BATCH_KEY, String(batchCounter));
+  }catch(e){ console.error('Storage error', e); }
+}
 
   function formatBatchNumber(date, n){
     const monthAbbr = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
@@ -2200,23 +2202,29 @@ async function persistInventory(){
   const HISTORY_KEY = 'kitchen-inventory-history';
   let inventoryHistory = [];
 
-  async function loadInventoryHistory(){
-    try{
-      const res = await window.storage.get(HISTORY_KEY, false);
-      inventoryHistory = res && res.value ? JSON.parse(res.value) : [];
-    }catch(e){
-      inventoryHistory = [];
-    }
-    renderHistoryPanel();
+async function loadInventoryHistory(){
+  try{
+    const res = localStorage.getItem(HISTORY_KEY);
+    inventoryHistory = res ? JSON.parse(res) : [];
+  }catch(e){
+    inventoryHistory = [];
   }
+  renderHistoryPanel();
+}
 
-  async function persistInventoryHistory(){
-    try{
-      await window.storage.set(HISTORY_KEY, JSON.stringify(inventoryHistory), false);
-    }catch(e){
-      console.error('Storage error', e);
+ async function persistInventoryHistory(){
+  try{
+    localStorage.setItem(INV_HIST_KEY, JSON.stringify(inventoryHistory));
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      fetch(GOOGLE_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveInventoryHistory", data: inventoryHistory })
+      });
     }
-  }
+  }catch(e){ console.error('Storage error', e); }
+}
 
   function logInventoryChange(itemName, uom, oldQty, newQty, reason){
     inventoryHistory.unshift({
