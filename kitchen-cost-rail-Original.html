@@ -1,0 +1,4591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitchen Cost Rail — Commissary Operations</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#1B1E1A;
+    --surface:#FFFFFF;
+    --surface-alt:#EDEAE0;
+    --ink:#1B1E1A;
+    --ink-soft:#4B4E46;
+    --rust:#B14A2C;
+    --rust-dark:#8F3A21;
+    --herb:#5C7A5A;
+    --herb-dark:#48603F;
+    --gold:#B5892E;
+    --steel:#6B6F66;
+    --line:#D8D4C6;
+    --line-dark:#3A3D36;
+    --danger:#A63A2E;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{
+    max-width:1180px;
+    margin:0 auto;
+    padding:28px 20px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  header.rail{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:20px;
+    padding:0 4px 22px;
+    border-bottom:1px solid var(--line-dark);
+    margin-bottom:26px;
+    flex-wrap:wrap;
+  }
+  .rail-title h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:clamp(28px,4vw,38px);
+    font-weight:700;
+    color:var(--surface);
+    margin:0 0 4px;
+    letter-spacing:-0.01em;
+  }
+  .rail-title p{
+    color:#A9AC9E;
+    margin:0;
+    font-size:14.5px;
+    max-width:46ch;
+  }
+  .rail-meta{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+    color:#8A8D82;
+    text-align:right;
+    line-height:1.7;
+  }
+  .rail-meta strong{color:var(--surface);font-weight:600;}
+
+  .print-btn{
+    margin-top:10px;
+    background:var(--surface);
+    color:var(--ink);
+    border:none;
+    padding:8px 14px;
+    border-radius:3px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .print-btn:hover{background:#E9E5D8;}
+
+  /* ---------- Tabs ---------- */
+  .tabs{
+    display:flex;
+    gap:10px;
+    margin-bottom:24px;
+  }
+  .tab-btn{
+    position:relative;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:15px;
+    font-weight:600;
+    color:#C7C9BE;
+    background:transparent;
+    border:1px solid var(--line-dark);
+    border-radius:3px 3px 0 0;
+    padding:12px 22px 13px;
+    cursor:pointer;
+    transition:color .15s ease, background .15s ease;
+  }
+  .tab-btn:hover{color:var(--surface);}
+  .tab-btn.active{
+    background:var(--surface);
+    color:var(--ink);
+    border-color:var(--surface);
+  }
+  .tab-btn .clip{
+    position:absolute;
+    top:-7px;
+    left:50%;
+    transform:translateX(-50%);
+    width:14px;
+    height:14px;
+    background:var(--rust);
+    border-radius:50%;
+    border:2px solid var(--bg);
+  }
+  .tab-btn.active .clip{background:var(--herb);}
+
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  /* ---------- Ticket card shell ---------- */
+  .ticket{
+    background:var(--surface);
+    border-radius:2px;
+    position:relative;
+    border-top:3px dashed var(--line);
+  }
+  .ticket::before{
+    content:"";
+    position:absolute;
+    top:-3px; left:0; right:0;
+    height:3px;
+  }
+
+  /* ---------- Layout: builder ---------- */
+  .builder-grid{
+    display:grid;
+    grid-template-columns:1.15fr 0.85fr;
+    gap:18px;
+    align-items:start;
+  }
+  @media (max-width:860px){
+    .builder-grid{grid-template-columns:1fr;}
+  }
+
+  .card{
+    background:var(--surface);
+    border-radius:3px;
+    padding:24px 24px 26px;
+  }
+  .card + .card{margin-top:18px;}
+
+  .section-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    letter-spacing:.03em;
+    color:var(--steel);
+    margin:0 0 14px;
+  }
+
+  label{
+    display:block;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:5px;
+  }
+  input[type=text], input[type=number], select{
+    width:100%;
+    padding:9px 11px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    background:#FDFCF9;
+  }
+  input:focus, select:focus{
+    outline:2px solid var(--herb);
+    outline-offset:1px;
+    border-color:var(--herb);
+  }
+
+  .field-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-bottom:14px;
+  }
+
+  .ingredient-row{
+    display:grid;
+    grid-template-columns:1.6fr 0.7fr 0.7fr 0.9fr 0.9fr 30px;
+    gap:8px;
+    align-items:end;
+    padding:10px 0;
+    border-bottom:1px solid var(--surface-alt);
+  }
+  .ingredient-row:first-of-type{padding-top:0;}
+  .ingredient-row .mini-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--steel);
+    margin-bottom:4px;
+    display:block;
+  }
+  .line-cost{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13.5px;
+    font-weight:600;
+    color:var(--ink);
+    padding:9px 0;
+  }
+  .row-remove{
+    background:none;
+    border:none;
+    color:var(--danger);
+    font-size:18px;
+    cursor:pointer;
+    line-height:1;
+    padding:8px 0;
+  }
+  .row-remove:hover{color:var(--rust-dark);}
+
+  .add-ingredient-btn{
+    margin-top:12px;
+    background:var(--surface-alt);
+    border:1px dashed var(--steel);
+    color:var(--ink-soft);
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    padding:9px 16px;
+    border-radius:3px;
+    cursor:pointer;
+    width:100%;
+  }
+  .add-ingredient-btn:hover{background:#E3E0D3;}
+
+  .headcols{
+    display:grid;
+    grid-template-columns:1.6fr 0.7fr 0.7fr 0.9fr 0.9fr 30px;
+    gap:8px;
+    margin-bottom:2px;
+  }
+  .headcols span{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--steel);
+  }
+
+  .pkg-row{
+    display:grid;
+    grid-template-columns:1.8fr 1fr 1fr 30px;
+    gap:8px;
+    align-items:end;
+    padding:10px 0;
+    border-bottom:1px solid var(--surface-alt);
+  }
+  .pkg-row:first-of-type{padding-top:0;}
+  .pkg-row .mini-label{display:none;}
+  .svc-extra-row{grid-template-columns:1.3fr 0.7fr 0.5fr 0.7fr 30px;}
+  .f-price-display{
+    padding:9px 11px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:var(--surface-alt);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13.5px;
+    color:var(--ink-soft);
+  }
+
+  .svc-role-row{
+    display:grid;
+    grid-template-columns:1.3fr 0.9fr 0.6fr 0.9fr;
+    gap:8px;
+    align-items:center;
+    padding:10px 0;
+    border-bottom:1px solid var(--surface-alt);
+  }
+  .svc-role-row:first-of-type{padding-top:0;}
+  .svc-role-row:last-of-type{border-bottom:none;}
+  .svc-role-label{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--ink);
+  }
+  .svc-role-row .line-cost{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13.5px;
+    font-weight:600;
+    color:var(--ink);
+  }
+
+  /* ---------- Summary panel (right side of builder) ---------- */
+  .summary-card{
+    background:var(--ink);
+    color:var(--surface);
+    border-radius:3px;
+    padding:24px;
+  }
+  .summary-card .section-label{color:#9C9F92;}
+  .summary-line{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    padding:9px 0;
+    border-bottom:1px solid #33362F;
+    font-size:13.5px;
+  }
+  .summary-line span:first-child{color:#B7B9AC;}
+  .summary-line span:last-child{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:500;
+  }
+  .cost-per-pax{
+    margin-top:18px;
+    padding-top:18px;
+    border-top:1px solid #33362F;
+  }
+  .cost-per-pax .amount{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:40px;
+    font-weight:700;
+    color:var(--surface);
+    line-height:1.1;
+    margin-top:4px;
+  }
+  .cost-per-pax .amount small{
+    font-size:16px;
+    font-weight:500;
+    color:#9C9F92;
+  }
+  .cost-per-pax .caption{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:#9C9F92;
+  }
+
+  .perpax-card{
+    margin-top:14px;
+    padding:20px 20px 8px;
+  }
+  .perpax-scroll{
+    max-height:260px;
+    overflow-y:auto;
+    margin:0 -4px;
+  }
+  table.perpax-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  table.perpax-table th{
+    position:sticky;
+    top:0;
+    background:var(--surface);
+    text-align:left;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--steel);
+    padding:6px 8px;
+    border-bottom:1px solid var(--line);
+  }
+  table.perpax-table td{
+    padding:8px 8px;
+    border-bottom:1px solid var(--surface-alt);
+    font-size:12.5px;
+    color:var(--ink);
+  }
+  table.perpax-table td.ing-name{
+    max-width:120px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  table.perpax-table tr:last-child td{border-bottom:none;}
+  table.perpax-table .num{
+    font-family:'IBM Plex Mono',monospace;
+    text-align:right;
+    white-space:nowrap;
+  }
+  .perpax-empty{
+    padding:16px 8px 20px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--steel);
+    text-align:center;
+  }
+
+  .save-btn{
+    width:100%;
+    margin-top:20px;
+    background:var(--rust);
+    color:#fff;
+    border:none;
+    padding:13px 16px;
+    border-radius:3px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    cursor:pointer;
+  }
+  .save-btn:hover{background:var(--rust-dark);}
+  .save-btn:disabled{background:#5B5D53;cursor:not-allowed;}
+
+  .pkg-piechart{border-top:1px solid #33362F;padding-top:4px;}
+  .vat-input-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:12px;
+  }
+  .vat-input-row label{
+    margin:0;
+    font-size:11.5px;
+    color:#B7B9AC;
+    font-weight:600;
+  }
+  .vat-input-row input, .vat-input-row select{
+    width:64px;
+    padding:6px 8px;
+    border:1px solid #40433A;
+    border-radius:3px;
+    background:#22261F;
+    color:var(--surface);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+  }
+  .vat-input-row span{
+    font-size:11.5px;
+    color:#B7B9AC;
+  }
+  .legend-warning{
+    font-size:10.5px;
+    color:#E08268;
+    margin-top:6px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .piechart-row{
+    display:flex;
+    align-items:center;
+    gap:18px;
+  }
+  .piechart-circle{
+    width:104px;
+    height:104px;
+    min-width:104px;
+    border-radius:50%;
+    background:#33362F;
+    box-shadow:inset 0 0 0 1px #40433A;
+  }
+  .piechart-legend{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+  .legend-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:8px;
+    font-size:11.5px;
+  }
+  .legend-label{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    color:#B7B9AC;
+  }
+  .legend-swatch{
+    width:9px;
+    height:9px;
+    border-radius:2px;
+    flex-shrink:0;
+  }
+  .legend-value{
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--surface);
+    white-space:nowrap;
+  }
+
+  .form-msg{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    margin-top:10px;
+    min-height:14px;
+  }
+  .form-msg.err{color:#E08268;}
+  .form-msg.ok{color:#9FD1A0;}
+
+  .editing-banner{
+    background:#EFE6D8;
+    border:1px solid #D8BE96;
+    color:var(--ink-soft);
+    font-size:12.5px;
+    padding:10px 14px;
+    border-radius:3px;
+    margin-top:18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .editing-banner strong{color:var(--ink);}
+  .editing-banner button{
+    background:none;
+    border:1px solid var(--steel);
+    color:var(--ink-soft);
+    border-radius:3px;
+    padding:4px 10px;
+    font-size:11.5px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .editing-banner button:hover{background:#E3D8C4;}
+
+  .item-actions .edit{color:var(--herb-dark);border-color:#C6D6C4;}
+
+  .recipe-hint{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--steel);
+    margin:-6px 0 14px;
+    min-height:14px;
+  }
+  .station-tag{
+    display:inline-block;
+    background:#E4EAE1;
+    color:var(--herb-dark);
+    border-radius:2px;
+    padding:2px 8px;
+    font-size:10.5px;
+    font-family:'IBM Plex Mono',monospace;
+    margin-right:8px;
+  }
+
+  .batch-tag{
+    display:inline-block;
+    background:var(--ink);
+    color:var(--surface);
+    border-radius:2px;
+    padding:2px 8px;
+    font-size:10.5px;
+    font-family:'IBM Plex Mono',monospace;
+    margin-right:8px;
+  }
+
+  .avail-check{border-top:1px solid #33362F;padding-top:4px;}
+  .avail-badge{
+    display:inline-block;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    padding:6px 14px;
+    border-radius:3px;
+    margin-bottom:8px;
+  }
+  .avail-badge.go{background:#2E4A2A;color:#9FD1A0;}
+  .avail-badge.nogo{background:#4A2A22;color:#E08268;}
+  .avail-badge.neutral{background:#33362F;color:#9C9F92;}
+  .shortage-list{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .shortage-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:11.5px;
+    font-family:'IBM Plex Mono',monospace;
+    color:#E08268;
+  }
+
+  .status-tag{
+    display:inline-block;
+    border-radius:2px;
+    padding:2px 8px;
+    font-size:10.5px;
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    margin-right:8px;
+  }
+  .status-tag.go{background:#E4EAE1;color:var(--herb-dark);}
+  .status-tag.nogo{background:#F3DED8;color:var(--danger);}
+
+  .kanban-board{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    align-items:start;
+  }
+  .kanban-board.inv-board{grid-template-columns:repeat(2,1fr);}
+  @media (max-width:860px){
+    .kanban-board{grid-template-columns:1fr;}
+    .kanban-board.inv-board{grid-template-columns:1fr;}
+  }
+  .kanban-col{
+    background:var(--surface);
+    border-radius:3px;
+    padding:16px;
+    min-height:120px;
+  }
+  .kanban-col-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding-bottom:12px;
+    margin-bottom:12px;
+    border-bottom:2px solid var(--line);
+  }
+  .kanban-col-head h3{
+    margin:0;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:14px;
+    font-weight:700;
+    letter-spacing:.01em;
+  }
+  .kanban-col.hold .kanban-col-head{border-bottom-color:var(--rust);}
+  .kanban-col.hold .kanban-col-head h3{color:var(--rust-dark);}
+  .kanban-col.processing .kanban-col-head{border-bottom-color:var(--herb);}
+  .kanban-col.processing .kanban-col-head h3{color:var(--herb-dark);}
+  .kanban-col.done .kanban-col-head{border-bottom-color:var(--steel);}
+  .kanban-col.done .kanban-col-head h3{color:var(--steel);}
+  .kanban-count{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    background:var(--surface-alt);
+    color:var(--ink-soft);
+    border-radius:10px;
+    padding:2px 9px;
+  }
+  .kanban-cards{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .kanban-card{
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:12px 14px;
+  }
+  .kanban-card .rname{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    color:var(--ink);
+    margin-top:6px;
+  }
+  .kanban-card .rmeta{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+    margin-top:4px;
+    line-height:1.5;
+  }
+  .kanban-card .rprice{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:13.5px;
+    color:var(--herb-dark);
+    margin-top:8px;
+  }
+  .kanban-card .kanban-actions{
+    display:flex;
+    gap:6px;
+    margin-top:10px;
+    flex-wrap:wrap;
+  }
+  .kanban-card .kanban-actions button{
+    background:none;
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:6px 10px;
+    font-size:11.5px;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  .kanban-card .kanban-actions button:hover{background:var(--surface-alt);}
+  .kanban-card .kanban-actions button.validate{color:var(--herb-dark);border-color:#C6D6C4;}
+  .kanban-card .kanban-actions button.del{color:var(--danger);border-color:#E5C9C2;}
+  .kanban-empty{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--steel);
+    padding:16px 4px;
+    text-align:center;
+  }
+
+  .tv-board-overlay{
+    position:fixed;
+    inset:0;
+    background:#14170F;
+    z-index:2000;
+    padding:50px 40px;
+    overflow-y:auto;
+    flex-direction:column;
+    align-items:center;
+  }
+  .tv-close-btn{
+    position:fixed;
+    top:24px;
+    right:28px;
+    background:var(--surface);
+    color:var(--ink);
+    border:none;
+    padding:10px 18px;
+    border-radius:3px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+  }
+  .tv-close-btn:hover{background:#E9E5D8;}
+  .tv-board-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:clamp(28px,4vw,42px);
+    color:var(--surface);
+    margin:0 0 36px;
+    letter-spacing:.02em;
+  }
+  .tv-board-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+    gap:20px;
+    width:100%;
+    max-width:1100px;
+  }
+  .tv-tile{
+    background:var(--surface);
+    border-radius:6px;
+    padding:26px 16px;
+    text-align:center;
+    border-top:5px solid var(--herb);
+  }
+  .tv-batch-num{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:38px;
+    color:var(--ink);
+    letter-spacing:.01em;
+  }
+  .tv-batch-meta{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-top:8px;
+  }
+  .tv-batch-cat{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--steel);
+    margin-top:4px;
+  }
+
+  .inv-stock-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    margin-top:10px;
+  }
+  .inv-stock-row label{
+    margin:0;
+    font-size:11px;
+    color:var(--steel);
+    font-weight:600;
+  }
+  .inv-stock-row .stock-input{
+    width:90px;
+    padding:7px 9px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+  }
+  .inv-linked{
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px solid var(--surface-alt);
+    font-size:11px;
+  }
+  .inv-linked-label{
+    color:var(--steel);
+    font-family:'IBM Plex Mono',monospace;
+    margin-right:6px;
+  }
+  .inv-linked-empty{
+    color:var(--steel);
+    font-family:'IBM Plex Mono',monospace;
+    font-style:italic;
+  }
+  .inv-linked .batch-tag{margin:2px 4px 2px 0;}
+
+  /* ---------- Tab: Recipe Manual / CCP board ---------- */
+  .ccp-board{
+    display:flex;
+    gap:14px;
+    overflow-x:auto;
+    padding-bottom:14px;
+    scroll-snap-type:x proximity;
+  }
+  .ccp-column{
+    flex:0 0 250px;
+    scroll-snap-align:start;
+    background:var(--surface);
+    border-radius:3px;
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    min-height:120px;
+  }
+  .ccp-col-header{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    color:var(--ink);
+    margin-bottom:10px;
+    padding-bottom:10px;
+    border-bottom:1px dashed var(--line);
+  }
+  .ccp-column select{margin-bottom:4px;}
+  .ccp-detail{margin-top:12px;}
+  .ccp-recipe-name{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    color:var(--ink);
+    margin-top:4px;
+  }
+  .ccp-meta{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--steel);
+    margin-bottom:10px;
+  }
+  .ccp-ing-list{
+    border-top:1px solid var(--surface-alt);
+    padding-top:6px;
+    margin-bottom:12px;
+  }
+  .ccp-ing-row{
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    font-size:12px;
+    padding:4px 0;
+    border-bottom:1px solid var(--surface-alt);
+  }
+  .ccp-ing-row span:first-child{color:var(--ink);}
+  .ccp-ing-row span:last-child{
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--steel);
+    white-space:nowrap;
+  }
+  .ccp-label{
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:5px;
+    display:block;
+  }
+  .ccp-textarea{
+    width:100%;
+    min-height:96px;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:'Inter',sans-serif;
+    font-size:12.5px;
+    color:var(--ink);
+    background:#FDFCF9;
+    resize:vertical;
+  }
+  .ccp-textarea:focus{
+    outline:2px solid var(--herb);
+    outline-offset:1px;
+    border-color:var(--herb);
+  }
+  .ccp-save-btn{
+    margin-top:8px;
+    width:100%;
+    background:var(--herb);
+    color:#fff;
+    border:none;
+    padding:8px 12px;
+    border-radius:3px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .ccp-save-btn:hover{background:var(--herb-dark);}
+  .ccp-save-msg{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--herb-dark);
+    margin-top:6px;
+    min-height:12px;
+  }
+  .ccp-empty{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--steel);
+    margin-top:8px;
+  }
+
+  /* ---------- Saved recipes list ---------- */
+  .recipe-list{
+    display:grid;
+    gap:12px;
+    margin-top:16px;
+  }
+  .recipe-item{
+    background:var(--surface);
+    border-radius:3px;
+    padding:16px 18px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .recipe-item .rname{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:15.5px;
+    color:var(--ink);
+  }
+  .recipe-item .rmeta{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--steel);
+    margin-top:3px;
+  }
+  .cat-tag{
+    display:inline-block;
+    background:var(--surface-alt);
+    color:var(--ink-soft);
+    border-radius:2px;
+    padding:2px 8px;
+    font-size:10.5px;
+    font-family:'IBM Plex Mono',monospace;
+    margin-right:8px;
+  }
+  .recipe-item .rprice{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:15px;
+    color:var(--herb-dark);
+    white-space:nowrap;
+  }
+  .item-actions button{
+    background:none;
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:6px 12px;
+    font-size:12px;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    margin-left:6px;
+    color:var(--ink-soft);
+  }
+  .item-actions button:hover{background:var(--surface-alt);}
+  .item-actions .del{color:var(--danger);border-color:#E5C9C2;}
+  .item-actions .view{color:var(--steel);border-color:var(--line);}
+
+  /* ---------- Toggle switch (Manage Access) ---------- */
+  .toggle-switch{
+    position:relative;
+    display:inline-block;
+    width:38px;
+    height:20px;
+    vertical-align:middle;
+  }
+  .toggle-switch input{opacity:0;width:0;height:0;}
+  .toggle-slider{
+    position:absolute;cursor:pointer;inset:0;
+    background:#D8D4C6;border-radius:20px;transition:.15s;
+  }
+  .toggle-slider:before{
+    content:"";position:absolute;height:14px;width:14px;left:3px;top:3px;
+    background:#fff;border-radius:50%;transition:.15s;
+  }
+  .toggle-switch input:checked + .toggle-slider{background:var(--herb);}
+  .toggle-switch input:checked + .toggle-slider:before{transform:translateX(18px);}
+  .toggle-switch input:disabled + .toggle-slider{opacity:0.5;cursor:not-allowed;}
+
+  .oos-tag{
+    display:inline-block;background:#F3DED8;color:var(--danger);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;
+    padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:.02em;
+  }
+  .history-row .h-reason{color:var(--steel);font-size:11px;}
+  .history-row.note-row{color:var(--danger);}
+
+  .access-account-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 0;border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:13px;
+  }
+  .access-account-row:last-child{border-bottom:none;}
+  .access-account-row .acct-name{font-family:'Space Grotesk',sans-serif;font-weight:600;color:var(--ink);}
+  .access-account-row .acct-meta{color:var(--steel);font-size:11.5px;display:block;font-family:'Inter',sans-serif;}
+
+  .archive-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px 0;border-bottom:1px solid var(--line);font-size:12.5px;
+  }
+  .archive-row:last-child{border-bottom:none;}
+  .archive-row .arch-label{font-weight:600;color:var(--ink);font-family:'Space Grotesk',sans-serif;}
+  .archive-row .arch-meta{color:var(--steel);font-size:11px;display:block;}
+  .archive-row button{
+    background:none;border:1px solid var(--line);border-radius:3px;
+    padding:6px 10px;font-size:11.5px;cursor:pointer;white-space:nowrap;
+  }
+  .archive-row button:hover{background:var(--surface-alt);}
+
+  .search-bar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:9px 12px;
+    margin-bottom:14px;
+    max-width:420px;
+  }
+  .search-bar input{
+    border:none;
+    outline:none;
+    background:transparent;
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    padding:0;
+  }
+  .search-bar .search-icon{color:var(--steel);font-size:13px;}
+  .search-bar.wide{max-width:100%;}
+
+  .so-tag{
+    display:inline-block;
+    background:var(--ink);
+    color:var(--surface);
+    border-radius:2px;
+    padding:2px 8px;
+    font-size:10.5px;
+    font-family:'IBM Plex Mono',monospace;
+    margin-right:8px;
+  }
+
+  .station-group{
+    margin-bottom:12px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .station-group summary{
+    cursor:pointer;
+    list-style:none;
+    padding:9px 12px;
+    background:var(--surface-alt);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .station-group summary::-webkit-details-marker{display:none;}
+  .station-group summary::after{content:'▾';font-size:11px;}
+  .station-group[open] summary::after{content:'▴';}
+  .station-group .kanban-cards{padding:10px;}
+
+  .history-panel{
+    margin-top:18px;
+    background:var(--surface);
+    border-radius:3px;
+    padding:14px 16px;
+    max-height:260px;
+    overflow-y:auto;
+  }
+  .history-row{
+    display:grid;
+    grid-template-columns:110px 1fr 1fr auto;
+    gap:10px;
+    font-size:11.5px;
+    padding:6px 0;
+    border-bottom:1px solid var(--surface-alt);
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--ink-soft);
+  }
+  .history-row:last-child{border-bottom:none;}
+  .history-row .h-user{color:var(--ink);font-weight:600;}
+  .history-row .h-change{color:var(--herb-dark);font-weight:600;text-align:right;}
+
+  .access-badge{
+    display:inline-block;
+    background:var(--surface-alt);
+    color:var(--ink-soft);
+    border-radius:2px;
+    padding:3px 10px;
+    font-size:10.5px;
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+  }
+  .access-table{width:100%;border-collapse:collapse;margin-top:10px;}
+  .access-table th, .access-table td{
+    text-align:left;
+    padding:8px 10px;
+    font-size:12px;
+    border-bottom:1px solid var(--line);
+  }
+  .access-table th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--steel);}
+  .access-table td.yes{color:var(--herb-dark);font-weight:600;}
+  .access-table td.no{color:var(--danger);}
+
+  .stockout-card{
+    background:var(--surface);
+    border-radius:3px;
+    padding:16px 18px;
+    margin-bottom:18px;
+  }
+  .stockout-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 0;
+    border-bottom:1px solid var(--surface-alt);
+    font-size:13px;
+    gap:10px;
+  }
+  .stockout-row:last-child{border-bottom:none;}
+  .stockout-row .so-name{font-weight:600;color:var(--ink);}
+  .stockout-row .so-meta{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--steel);}
+  .stockout-row .so-cost{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--danger);white-space:nowrap;}
+
+  .inv-availability{
+    display:flex;
+    gap:14px;
+    margin-top:8px;
+    flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+  }
+  .inv-availability b{color:var(--ink);}
+
+  .empty-state{
+    color:#A9AC9E;
+    font-size:13.5px;
+    padding:30px 10px;
+    text-align:center;
+    font-family:'IBM Plex Mono',monospace;
+  }
+
+  .pax-adjust{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:8px;
+    flex-wrap:wrap;
+  }
+  .pax-adjust label{
+    margin:0;
+    font-size:11px;
+    color:var(--steel);
+    font-weight:600;
+  }
+  .pax-adjust-input{
+    width:70px;
+    padding:5px 8px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+  }
+  .pax-adjust-result{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--herb-dark);
+    font-weight:600;
+  }
+
+  /* ---------- Tab 2: procurement ---------- */
+  .proc-toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .kpi-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin-bottom:18px;
+  }
+  @media (max-width:700px){.kpi-row{grid-template-columns:1fr;}}
+  .kpi-row.kpi-row-4{grid-template-columns:repeat(4,1fr);}
+  @media (max-width:900px){.kpi-row.kpi-row-4{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:520px){.kpi-row.kpi-row-4{grid-template-columns:1fr;}}
+  .kpi{
+    background:var(--surface);
+    border-radius:3px;
+    padding:18px 20px;
+  }
+  .kpi .k-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+  }
+  .kpi .k-value{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:26px;
+    font-weight:700;
+    color:var(--ink);
+    margin-top:4px;
+  }
+
+  table.proc-table{
+    width:100%;
+    table-layout:fixed;
+    border-collapse:collapse;
+    background:var(--surface);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  table.proc-table col.col-name{width:34%;}
+  table.proc-table col.col-num{width:22%;}
+  table.proc-table th{
+    text-align:left;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--steel);
+    padding:12px 16px;
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+    vertical-align:middle;
+  }
+  table.proc-table th:hover{color:var(--ink);}
+  table.proc-table th.num{text-align:right;}
+  table.proc-table td{
+    padding:13px 16px;
+    border-bottom:1px solid var(--surface-alt);
+    font-size:13.5px;
+    vertical-align:middle;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  table.proc-table tr:last-child td{border-bottom:none;}
+  .num{font-family:'IBM Plex Mono',monospace;text-align:right;white-space:nowrap;}
+  .used-in{
+    font-size:11.5px;
+    color:var(--steel);
+    margin-top:2px;
+    white-space:normal;
+    overflow-wrap:break-word;
+  }
+  .stockout-tag{
+    display:inline-block;
+    background:#F3DED8;
+    color:var(--danger);
+    border-radius:2px;
+    padding:2px 8px;
+    font-size:10px;
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    margin-left:8px;
+  }
+
+  select#filterCategory{width:auto;display:inline-block;}
+
+  .footer-note{
+    text-align:center;
+    color:#6E7166;
+    font-size:12px;
+    margin-top:36px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+
+  ::selection{background:var(--herb);color:#fff;}
+
+  @media print{
+    body{background:#fff !important;}
+    .wrap{max-width:100%;padding:0;margin:0;}
+
+    header.rail{
+      border-bottom:2px solid #1B1E1A;
+      margin-bottom:16px;
+      padding-bottom:14px;
+      align-items:flex-start;
+    }
+    .rail-title h1{color:#1B1E1A;}
+    .rail-title p{color:#4B4E46;}
+    .rail-meta, .rail-meta strong{color:#1B1E1A;}
+    .print-btn{display:none !important;}
+
+    .tabs{display:none !important;}
+    .panel{display:none !important;}
+    .panel.active{display:block !important;}
+
+    /* hide interactive/editing chrome not needed on paper */
+    .add-ingredient-btn, .save-btn, .row-remove, .item-actions,
+    .form-msg, .editing-banner, .ccp-save-btn, .ccp-save-msg,
+    .pax-adjust{display:none !important;}
+
+    .card, .ticket, .kpi, table.proc-table, .ccp-column, .recipe-item{
+      box-shadow:none;
+      border:1px solid #D8D4C6;
+    }
+    .summary-card{
+      background:#fff;
+      color:#1B1E1A;
+      border:1px solid #1B1E1A;
+      position:static;
+    }
+    .summary-card .section-label{color:#4B4E46;}
+    .summary-line{border-bottom:1px solid #D8D4C6;}
+    .summary-line span:first-child{color:#4B4E46;}
+    .summary-line span:last-child{color:#1B1E1A;}
+    .cost-per-pax{border-top:1px solid #D8D4C6;}
+    .cost-per-pax .amount{color:#1B1E1A;}
+    .cost-per-pax .caption{color:#4B4E46;}
+    .pkg-piechart{border-top:1px solid #D8D4C6;}
+    .legend-label{color:#4B4E46;}
+    .legend-value{color:#1B1E1A;}
+
+    .ccp-board{overflow:visible;flex-wrap:wrap;}
+    .ccp-column{break-inside:avoid;}
+    .recipe-item, .kpi, .ingredient-row, .pkg-row{break-inside:avoid;}
+
+    input, select, textarea{
+      border:1px solid #D8D4C6 !important;
+      background:#fff !important;
+      color:#1B1E1A !important;
+    }
+
+    .footer-note{display:none;}
+  }
+
+  .login-screen{
+    position:fixed;
+    inset:0;
+    background:var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+    padding:20px;
+  }
+  .login-card{
+    background:var(--surface);
+    border-radius:4px;
+    padding:34px 30px;
+    max-width:360px;
+    width:100%;
+  }
+  .login-card h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:24px;
+    font-weight:700;
+    color:var(--ink);
+    margin:0 0 6px;
+  }
+  .login-card p{
+    color:var(--ink-soft);
+    font-size:13px;
+    margin:0 0 20px;
+  }
+  .login-card label{
+    display:block;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:5px;
+  }
+  .login-card input{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    margin-bottom:14px;
+  }
+  .login-card input:focus{
+    outline:2px solid var(--herb);
+    outline-offset:1px;
+    border-color:var(--herb);
+  }
+  #loginBtn, #retryAccessBtn, #enterAppBtn{
+    width:100%;
+    background:var(--rust);
+    color:#fff;
+    border:none;
+    padding:12px 16px;
+    border-radius:3px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    cursor:pointer;
+    margin-bottom:6px;
+  }
+  #loginBtn:hover, #retryAccessBtn:hover, #enterAppBtn:hover{background:var(--rust-dark);}
+  .login-msg{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    margin-top:12px;
+    min-height:14px;
+    color:#A63A2E;
+  }
+  .login-note{
+    font-size:11px !important;
+    color:var(--steel) !important;
+    margin-top:16px !important;
+  }
+  .role-select-wrap select{margin-bottom:6px;}
+  .role-desc{
+    font-size:11.5px;
+    color:var(--steel);
+    margin:0 0 14px;
+    min-height:14px;
+  }
+  .access-link{
+    background:none;
+    border:none;
+    color:var(--herb-dark);
+    font-size:11.5px;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+    margin-top:-6px;
+    margin-bottom:14px;
+  }
+  .access-modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.6);
+    z-index:3000;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  .access-modal{
+    background:var(--surface);
+    border-radius:4px;
+    padding:26px 26px 20px;
+    max-width:560px;
+    width:100%;
+    max-height:80vh;
+    overflow-y:auto;
+  }
+  .access-modal h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:19px;
+    margin:0 0 4px;
+    color:var(--ink);
+  }
+  .access-modal p{font-size:12.5px;color:var(--ink-soft);margin:0 0 4px;}
+  .access-modal .print-btn{margin-top:16px;}
+
+  [data-req-role]{}
+  .role-badge-pill{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:#8A8D82;
+  }
+
+  @media (max-width:520px){
+    .headcols{display:none;}
+    .ingredient-row{
+      grid-template-columns:1fr 1fr;
+      grid-template-areas:
+        "name name"
+        "qty uom"
+        "price cost"
+        "remove remove";
+    }
+    .pkg-row{
+      grid-template-columns:1fr 1fr;
+      grid-template-areas:
+        "desc desc"
+        "price cost"
+        "remove remove";
+    }
+    .pkg-row .mini-label{display:block;}
+    .svc-extra-row{grid-template-columns:1fr 1fr;}
+    .svc-role-row{
+      grid-template-columns:1fr 1fr;
+      grid-template-areas:
+        "role role"
+        "price qty"
+        "total total";
+      row-gap:6px;
+    }
+    .svc-role-label{grid-area:role;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <h1>Kitchen Cost Rail</h1>
+    <p id="gateMessage">Checking your company Google sign-in…</p>
+    <button type="button" id="retryAccessBtn" style="display:none;">Try again</button>
+    <div class="login-msg" id="loginMsg"></div>
+
+    <div class="role-select-wrap">
+      <label for="loginUsername">Username</label>
+      <input type="text" id="loginUsername" placeholder="admin / chef1 / chef2 — leave blank to view only" autocomplete="username">
+      <label for="loginPassword" style="margin-top:8px;display:block;">Password</label>
+      <input type="password" id="loginPassword" placeholder="Leave blank to continue as Viewer" autocomplete="current-password">
+      <p class="role-desc" id="roleDesc">No login? You'll enter as Level 3 — Viewer (read-only).</p>
+      <button type="button" class="access-link" id="showAccessTableBtn">What can each level do?</button>
+    </div>
+
+    <div>
+      <label for="currentUserInput">Your name (for change history)</label>
+      <input type="text" id="currentUserInput" placeholder="e.g. Marco R.">
+    </div>
+
+    <button type="button" id="enterAppBtn">Enter app</button>
+
+    <p class="login-note">This app is restricted to signed-in company Google accounts. If you're not signed in, open <a href="https://mail.google.com" target="_blank" rel="noopener" style="color:var(--herb-dark);">Gmail</a> in another tab with your work account, then click "Try again".</p>
+  </div>
+</div>
+
+<div class="access-modal-overlay" id="accessModalOverlay">
+  <div class="access-modal">
+    <h2>Access levels</h2>
+    <p>Three fixed accounts control who can view, create, edit, delete, or manage access in this dashboard. Everyone else who opens the link without logging in gets read-only Viewer access.</p>
+    <table class="access-table">
+      <thead>
+        <tr><th>Action</th><th>Admin<br><span style="font-weight:400;">(admin)</span></th><th>Manager<br><span style="font-weight:400;">(chef1 / chef2)</span></th><th>Viewer<br><span style="font-weight:400;">(everyone else)</span></th></tr>
+      </thead>
+      <tbody>
+        <tr><td>View all tabs &amp; reports, and view saved recipe/plan/package details</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Create recipe cards / production plans / packages</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
+        <tr><td>Edit / update existing entries</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
+        <tr><td>Update inventory stock on hand</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
+        <tr><td>Validate / mark production Done</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
+        <tr><td>Delete recipe cards, plans, or packages</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Run Master Archive export &amp; manage user access</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="print-btn" id="closeAccessTableBtn">Close</button>
+  </div>
+</div>
+
+<div class="access-modal-overlay" id="manageAccessOverlay">
+  <div class="access-modal">
+    <h2>Manage user access</h2>
+    <p>Admin, Chef 1, and Chef 2 are fixed accounts. You can enable or disable the two manager accounts here — anyone signing in with a disabled account will fall back to Viewer. Usernames and passwords cannot be changed from this screen.</p>
+    <div id="accessAccountsList"></div>
+    <button type="button" class="print-btn" id="closeManageAccessBtn" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<div class="access-modal-overlay" id="masterArchiveOverlay">
+  <div class="access-modal">
+    <h2>Master Archive</h2>
+    <p>Save a snapshot of every module (recipe cards, production plans, packages, inventory, and stock history) as a downloadable Excel workbook. Useful before switching to a new month of planning — previous snapshots stay listed here for re-download.</p>
+    <button type="button" class="print-btn" id="createArchiveBtn" style="margin-bottom:14px;">🗄 Save &amp; export new archive</button>
+    <p style="font-size:12px;color:var(--ink-soft);margin:0 0 6px;font-weight:600;">Previous archives</p>
+    <div id="archiveList"></div>
+    <button type="button" class="print-btn" id="closeMasterArchiveBtn" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<div class="access-modal-overlay" id="viewDetailOverlay">
+  <div class="access-modal">
+    <h2 id="viewDetailTitle">Details</h2>
+    <div id="viewDetailBody"></div>
+    <button type="button" class="print-btn" id="closeViewDetailBtn" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<div class="wrap" id="appWrap" style="display:none;">
+
+<div id="tvBoardOverlay" class="tv-board-overlay" style="display:none;">
+  <button type="button" id="closeTvBoardBtn" class="tv-close-btn">✕ Close</button>
+  <h2 class="tv-board-title">Batches Ready</h2>
+  <div class="tv-board-grid" id="tvBoardGrid"></div>
+</div>
+
+  <header class="rail">
+    <div class="rail-title">
+      <h1>Kitchen Cost Rail</h1>
+      <p>Recipe costing and ingredient procurement for the commissary kitchen line.</p>
+    </div>
+    <div class="rail-meta">
+      Currency: <strong>₱ PHP</strong><br>
+      Scope: <strong>Kitchen Department</strong><br>
+      Access: <span class="role-badge-pill" id="currentRoleBadge">—</span>
+      <button class="print-btn" id="masterArchiveOpenBtn" type="button" style="margin-top:6px;display:none;">🗄 Master Archive</button>
+      <button class="print-btn" id="manageAccessOpenBtn" type="button" style="margin-top:6px;display:none;">🔐 Manage Access</button>
+      <button class="print-btn" id="printBtn" type="button" style="margin-top:6px;">🖨 Print / Save as PDF</button>
+      <button class="print-btn" id="logoutBtn" type="button" style="margin-top:6px;">Refresh</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="builder"><span class="clip"></span>Recipe Cards</button>
+    <button class="tab-btn" data-tab="ccp"><span class="clip"></span>Recipe Manual</button>
+    <button class="tab-btn" data-tab="procurement"><span class="clip"></span>Ingredient Procurement</button>
+    <button class="tab-btn" data-tab="production"><span class="clip"></span>Production Planning</button>
+    <button class="tab-btn" data-tab="packages"><span class="clip"></span>Package Cost Calculator</button>
+    <button class="tab-btn" data-tab="inventory"><span class="clip"></span>Inventory Status</button>
+  </div>
+
+  <!-- ===================== TAB 1 ===================== -->
+  <section class="panel active" id="panel-builder">
+    <div class="builder-grid">
+      <div>
+        <div class="card ticket">
+          <p class="section-label">RECIPE CARD — NEW ENTRY</p>
+
+          <div class="field-row">
+            <div>
+              <label for="recipeName">Recipe name</label>
+              <input type="text" id="recipeName" placeholder="e.g. Chicken Adobo">
+            </div>
+            <div>
+              <label for="recipeCategory">Category</label>
+              <select id="recipeCategory">
+                <option value="">Select category…</option>
+                <option value="Appetizer">Appetizer</option>
+                <option value="Soup">Soup</option>
+                <option value="Bread">Bread</option>
+                <option value="Salad">Salad</option>
+                <option value="Beef Entree">Beef Entree</option>
+                <option value="Pork Entree">Pork Entree</option>
+                <option value="Chicken Entree">Chicken Entree</option>
+                <option value="Seafood">Seafood</option>
+                <option value="Pasta">Pasta</option>
+                <option value="Dessert">Dessert</option>
+                <option value="Beverage">Beverage</option>
+                <option value="Sauce">Sauce</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field-row" style="grid-template-columns:1fr;max-width:220px;">
+            <div>
+              <label for="recipeYield">Yield (pax)</label>
+              <input type="number" id="recipeYield" min="1" step="1" placeholder="e.g. 10">
+            </div>
+          </div>
+
+          <p class="section-label" style="margin-top:22px;">INGREDIENTS</p>
+          <div class="headcols">
+            <span>Ingredient</span>
+            <span>Qty</span>
+            <span>UOM</span>
+            <span>Unit price (₱)</span>
+            <span>Line cost</span>
+            <span></span>
+          </div>
+          <div id="ingredientRows"></div>
+          <button class="add-ingredient-btn" id="addIngredientBtn" type="button">+ Add ingredient</button>
+
+          <div id="editingBanner" class="editing-banner" style="display:none;">
+            Editing <strong id="editingName"></strong> — saving will update this card.
+            <button type="button" id="cancelEditBtn">Cancel</button>
+          </div>
+
+          <button class="save-btn" id="saveRecipeBtn" type="button">Save recipe card</button>
+          <div class="form-msg" id="formMsg"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="summary-card">
+          <p class="section-label">LIVE COST SUMMARY</p>
+          <div class="summary-line"><span>Total ingredients</span><span id="sumCount">0</span></div>
+          <div class="summary-line"><span>Total recipe cost</span><span id="sumTotal">₱0.00</span></div>
+          <div class="summary-line"><span>Yield</span><span id="sumYield">— pax</span></div>
+          <div class="cost-per-pax">
+            <span class="caption">COST PER 1 PAX YIELD</span>
+            <div class="amount" id="sumPerPax">₱0.00</div>
+          </div>
+        </div>
+
+        <div class="card perpax-card">
+          <p class="section-label">PER 1 PAX BREAKDOWN</p>
+          <div class="perpax-scroll">
+            <table class="perpax-table">
+              <thead>
+                <tr>
+                  <th>Ingredient</th>
+                  <th class="num">Qty / pax</th>
+                  <th>UOM</th>
+                  <th class="num">Price / pax</th>
+                </tr>
+              </thead>
+              <tbody id="perPaxBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:34px;">
+      <p class="section-label" style="color:#9C9F92;">SAVED RECIPE CARDS</p>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="recipeSearchInput" placeholder="Search saved recipe cards by name or category…">
+      </div>
+      <div class="recipe-list" id="recipeList"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: RECIPE MANUAL / CCP ===================== -->
+  <section class="panel" id="panel-ccp">
+    <p class="section-label" style="color:#9C9F92;margin-bottom:14px;">
+      LINE BOARD — select a recipe under each course to view ingredients and set critical control points for chefs.
+    </p>
+    <div class="ccp-board" id="ccpBoard"></div>
+  </section>
+
+  <!-- ===================== TAB 2 ===================== -->
+  <section class="panel" id="panel-procurement">
+    <div class="kpi-row kpi-row-4">
+      <div class="kpi">
+        <div class="k-label">RECIPES COUNTED</div>
+        <div class="k-value" id="kpiRecipes">0</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">DISTINCT INGREDIENTS</div>
+        <div class="k-value" id="kpiIngredients">0</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">INGREDIENTS STOCK-OUT</div>
+        <div class="k-value" id="kpiStockOut">0</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">TOTAL ITEMS TO PROCURE</div>
+        <div class="k-value" id="kpiValue">₱0.00</div>
+      </div>
+    </div>
+
+    <div class="stockout-card" id="stockoutCard" style="display:none;">
+      <p class="section-label" style="margin-bottom:10px;">INGREDIENTS TO REPLENISH — needed by active production plans, short of stock on hand</p>
+      <div id="stockoutList"></div>
+    </div>
+
+    <div class="proc-toolbar">
+      <div>
+        <label style="margin-bottom:4px;">Filter by category</label>
+        <select id="filterCategory"><option value="">All categories</option></select>
+      </div>
+    </div>
+
+    <div id="procTableWrap"></div>
+  </section>
+
+  <!-- ===================== TAB 3 ===================== -->
+  <section class="panel" id="panel-production">
+    <div class="builder-grid">
+      <div>
+        <div class="card ticket">
+          <p class="section-label">PRODUCTION PLAN — NEW ENTRY</p>
+
+          <div class="field-row">
+            <div>
+              <label for="prodEvent">Event</label>
+              <input type="text" id="prodEvent" placeholder="e.g. Delgado Wedding">
+            </div>
+            <div>
+              <label for="prodEventDate">Event date</label>
+              <input type="date" id="prodEventDate">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div>
+              <label for="prodRecipe">Recipe</label>
+              <select id="prodRecipe"><option value="">Select a saved recipe…</option></select>
+            </div>
+            <div>
+              <label for="prodPax">Pax needed</label>
+              <input type="number" id="prodPax" min="1" step="1" placeholder="e.g. 150">
+            </div>
+          </div>
+          <p class="recipe-hint" id="recipeHint"></p>
+
+          <p class="section-label" style="margin-top:20px;">BATCH SCHEDULE</p>
+          <div class="field-row">
+            <div>
+              <label for="prodBatchDate">Batch production date</label>
+              <input type="date" id="prodBatchDate">
+            </div>
+            <div>
+              <label for="prodCategory">Production category</label>
+              <select id="prodCategory">
+                <option value="">Select category…</option>
+                <option value="Meat Production">Meat Production</option>
+                <option value="Dessert Production">Dessert Production</option>
+                <option value="Bread Production">Bread Production</option>
+                <option value="Sauce Production">Sauce Production</option>
+              </select>
+            </div>
+          </div>
+          <p class="recipe-hint" id="batchNumberHint">Batch #: will be assigned when saved</p>
+
+          <p class="section-label" style="margin-top:20px;">TIMING</p>
+          <div class="field-row">
+            <div>
+              <label for="prodStart">Start time</label>
+              <input type="time" id="prodStart">
+            </div>
+            <div>
+              <label for="prodEnd">Target finish time</label>
+              <input type="time" id="prodEnd">
+            </div>
+          </div>
+
+          <div id="editingProdBanner" class="editing-banner" style="display:none;">
+            Editing <strong id="editingProdName"></strong> — saving will update this plan.
+            <button type="button" id="cancelProdEditBtn">Cancel</button>
+          </div>
+
+          <button class="save-btn" id="saveProdBtn" type="button">Schedule production</button>
+          <div class="form-msg" id="prodFormMsg"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="summary-card">
+          <p class="section-label">RUN ESTIMATE</p>
+          <div class="summary-line"><span>Recipe yield</span><span id="prodYieldDisplay">— pax</span></div>
+          <div class="summary-line"><span>Batches needed</span><span id="prodBatches">0</span></div>
+          <div class="summary-line"><span>Cost per pax</span><span id="prodCostPerPax">₱0.00</span></div>
+          <div class="cost-per-pax">
+            <span class="caption">ESTIMATED PRODUCTION COST</span>
+            <div class="amount" id="prodEstCost">₱0.00</div>
+          </div>
+
+          <div class="avail-check">
+            <p class="section-label" style="color:#9C9F92;margin-top:18px;margin-bottom:8px;">INGREDIENT AVAILABILITY</p>
+            <div class="avail-badge" id="prodAvailBadge">—</div>
+            <div id="prodShortageList" class="shortage-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:34px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+        <p class="section-label" style="color:#9C9F92;margin-bottom:0;">SCHEDULED PRODUCTIONS</p>
+        <button class="add-ingredient-btn" id="openTvBoardBtn" type="button" style="width:auto;margin-top:0;padding:9px 16px;">📺 Batches Ready Board</button>
+      </div>
+      <div class="proc-toolbar">
+        <div>
+          <label style="margin-bottom:4px;">Filter by production category</label>
+          <select id="filterStation"><option value="">All categories</option></select>
+        </div>
+      </div>
+      <div class="kanban-board" id="productionBoard"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: PACKAGE COST CALCULATOR ===================== -->
+  <section class="panel" id="panel-packages">
+    <div class="builder-grid">
+      <div>
+        <div class="card ticket">
+          <p class="section-label">PACKAGE — NEW ENTRY</p>
+
+          <div class="field-row" style="grid-template-columns:1fr;max-width:260px;">
+            <div>
+              <label for="pkgSoNumber">SO Number</label>
+              <input type="text" id="pkgSoNumber" placeholder="e.g. SO-2026-0091">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div>
+              <label for="pkgName">Name of package</label>
+              <input type="text" id="pkgName" placeholder="e.g. Silver Package (100 pax)">
+            </div>
+            <div>
+              <label for="pkgPax">Number of pax</label>
+              <input type="number" id="pkgPax" min="1" step="1" placeholder="e.g. 100">
+            </div>
+          </div>
+
+          <p class="section-label" style="margin-top:22px;">FOOD ITEMS <span style="color:var(--rust);">(×3 markup applied)</span></p>
+          <div class="headcols" style="grid-template-columns:1.8fr 1fr 1fr 30px;">
+            <span>Recipe</span>
+            <span>Price /pax (₱)</span>
+            <span>×3 price</span>
+            <span></span>
+          </div>
+          <div id="pkgFoodRows"></div>
+          <button class="add-ingredient-btn" id="addPkgFoodBtn" type="button">+ Add food item</button>
+
+          <p class="section-label" style="margin-top:22px;">SERVICE STAFF & LOGISTICS <span style="color:var(--steel);">(price × qty per role)</span></p>
+          <div class="headcols" style="grid-template-columns:1.3fr 0.9fr 0.6fr 0.9fr;">
+            <span>Role</span>
+            <span>Price (₱)</span>
+            <span>Qty</span>
+            <span>Line total</span>
+          </div>
+          <div id="pkgServiceRows"></div>
+
+          <p class="section-label" style="margin-top:14px;">ADDITIONAL PROFESSIONAL SERVICES <span style="color:var(--steel);">(price × qty)</span></p>
+          <div class="headcols" style="grid-template-columns:1.3fr 0.7fr 0.5fr 0.7fr 30px;">
+            <span>Description</span>
+            <span>Price (₱)</span>
+            <span>Qty</span>
+            <span>Line total</span>
+            <span></span>
+          </div>
+          <div id="pkgServiceExtraRows"></div>
+          <button class="add-ingredient-btn" id="addPkgServiceExtraBtn" type="button">+ Add service item</button>
+
+          <p class="section-label" style="margin-top:22px;">MISCELLANEOUS <span style="color:var(--steel);">(no markup)</span></p>
+          <div class="headcols" style="grid-template-columns:1.8fr 1fr 1fr 30px;">
+            <span>Description</span>
+            <span>Price (₱)</span>
+            <span></span>
+            <span></span>
+          </div>
+          <div id="pkgMiscRows"></div>
+          <button class="add-ingredient-btn" id="addPkgMiscBtn" type="button">+ Add miscellaneous item</button>
+
+          <div id="editingPkgBanner" class="editing-banner" style="display:none;">
+            Editing <strong id="editingPkgName"></strong> — saving will update this package.
+            <button type="button" id="cancelPkgEditBtn">Cancel</button>
+          </div>
+
+          <button class="save-btn" id="savePkgBtn" type="button">Save package</button>
+          <div class="form-msg" id="pkgFormMsg"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="summary-card">
+          <p class="section-label">LIVE PACKAGE SUMMARY</p>
+          <div class="summary-line"><span>Food input subtotal (per pax)</span><span id="pkgFoodSubtotal">₱0.00</span></div>
+          <div class="summary-line"><span>Food ×3 (per pax)</span><span id="pkgFoodCharged">₱0.00</span></div>
+          <div class="summary-line"><span>Number of pax</span><span id="pkgPaxDisplay">— pax</span></div>
+          <div class="summary-line"><span>Food ×3 × pax</span><span id="pkgFoodChargedTotal">₱0.00</span></div>
+          <div class="summary-line"><span>Service total (staff & logistics)</span><span id="pkgServiceTotal">₱0.00</span></div>
+          <div class="summary-line"><span>Miscellaneous total (flat)</span><span id="pkgMiscTotal">₱0.00</span></div>
+          <div class="cost-per-pax">
+            <span class="caption">TOTAL PACKAGE PRICE</span>
+            <div class="amount" id="pkgGrandTotal">₱0.00</div>
+          </div>
+          <div class="cost-per-pax">
+            <span class="caption">PRICE PER 1 PAX</span>
+            <div class="amount" id="pkgPerPax" style="font-size:28px;">₱0.00</div>
+          </div>
+
+          <div class="pkg-piechart">
+            <p class="section-label" style="color:#9C9F92;margin-top:18px;margin-bottom:10px;">COST BREAKDOWN</p>
+            <div class="piechart-row">
+              <div class="piechart-circle" id="pkgPieChart"></div>
+              <div class="piechart-legend" id="pkgPieLegend"></div>
+            </div>
+          </div>
+
+          <div class="pkg-piechart">
+            <p class="section-label" style="color:#9C9F92;margin-top:18px;margin-bottom:10px;">PRICE STRUCTURE (% of total)</p>
+            <div class="vat-input-row">
+              <label for="pkgVatRate">VAT rate</label>
+              <input type="number" id="pkgVatRate" min="0" max="100" step="0.1" value="12">
+              <span>%</span>
+              <label for="pkgPackageCostInput" style="margin-left:14px;">Standard package</label>
+              <input type="number" id="pkgPackageCostInput" min="0" step="0.01" placeholder="e.g. 1650" style="width:100px;">
+            </div>
+            <div class="piechart-row">
+              <div class="piechart-circle" id="pkgStructureChart"></div>
+              <div class="piechart-legend" id="pkgStructureLegend"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:34px;">
+      <p class="section-label" style="color:#9C9F92;">SAVED PACKAGES</p>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="pkgSearchInput" placeholder="Search by SO number or package name…">
+      </div>
+      <div class="recipe-list" id="packageList"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: INVENTORY STATUS ===================== -->
+  <section class="panel" id="panel-inventory">
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="k-label">TOTAL COST OF ITEMS OUT</div>
+        <div class="k-value" id="invKpiTracked">₱0.00</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">OUT OF STOCK</div>
+        <div class="k-value" id="invKpiOut">0</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">PRODUCTIONS BLOCKED</div>
+        <div class="k-value" id="invKpiBlocked">0</div>
+      </div>
+    </div>
+    <p class="section-label" style="color:#9C9F92;margin-bottom:14px;">
+      Set current stock on hand for each ingredient. Stock is reserved automatically once used in a production plan, so a new plan won't double-book the same stock. Production plans check against remaining availability to show GO / NO-GO status.
+    </p>
+    <div class="search-bar wide">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="invSearchInput" placeholder="Search ingredients (filters both No Stock and In Stock)…">
+    </div>
+    <div id="inventoryTableWrap"></div>
+
+    <div style="margin-top:24px;">
+      <p class="section-label" style="color:#9C9F92;">STOCK CHANGE HISTORY</p>
+      <div class="history-panel" id="historyPanel"></div>
+    </div>
+  </section>
+
+  <p class="footer-note">Data is stored privately for this device — Kitchen Cost Rail, Commissary Operations Dashboard.</p>
+</div>
+
+<script>
+function initApp(){
+  const PHP = n => '₱' + (Number(n)||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const STORAGE_KEY = 'kitchen-recipes';
+  const PLANS_KEY = 'kitchen-production-plans';
+  const PACKAGES_KEY = 'kitchen-packages';
+  const INVENTORY_KEY = 'kitchen-inventory';
+  const BATCH_COUNTER_KEY = 'kitchen-batch-counter';
+  const UOMS = ['kg','g','L','mL','pcs','pack','can','box','dozen','bundle'];
+
+  let recipes = [];
+  let plans = [];
+  let packages = [];
+  let inventory = [];
+  let batchCounter = 0;
+  let rowIdCounter = 0;
+  let sortState = { key:'name', dir:1 };
+  let editingId = null;
+  let editingProdId = null;
+  let editingPkgId = null;
+
+  // ---------- Storage ----------
+  async function loadRecipes(){
+    try{
+      const res = await window.storage.get(STORAGE_KEY, false);
+      recipes = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      recipes = [];
+    }
+    renderRecipeList();
+    renderProcurement();
+  }
+
+  async function persistRecipes(){
+    try{
+      await window.storage.set(STORAGE_KEY, JSON.stringify(recipes), false);
+    }catch(e){
+      console.error('Storage error', e);
+    }
+  }
+
+  async function loadPlans(){
+    try{
+      const res = await window.storage.get(PLANS_KEY, false);
+      plans = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      plans = [];
+    }
+    renderProductionList();
+  }
+
+  async function persistPlans(){
+    try{
+      await window.storage.set(PLANS_KEY, JSON.stringify(plans), false);
+    }catch(e){
+      console.error('Storage error', e);
+    }
+  }
+
+  async function loadPackages(){
+    try{
+      const res = await window.storage.get(PACKAGES_KEY, false);
+      packages = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      packages = [];
+    }
+    renderPackageList();
+  }
+
+  async function persistPackages(){
+    try{
+      await window.storage.set(PACKAGES_KEY, JSON.stringify(packages), false);
+    }catch(e){
+      console.error('Storage error', e);
+    }
+  }
+
+  async function loadInventory(){
+    try{
+      const res = await window.storage.get(INVENTORY_KEY, false);
+      inventory = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      inventory = [];
+    }
+    syncInventoryFromRecipes();
+    renderInventoryTable();
+  }
+
+  async function persistInventory(){
+    try{
+      await window.storage.set(INVENTORY_KEY, JSON.stringify(inventory), false);
+    }catch(e){
+      console.error('Storage error', e);
+    }
+  }
+
+  async function loadBatchCounter(){
+    try{
+      const res = await window.storage.get(BATCH_COUNTER_KEY, false);
+      batchCounter = res && res.value ? (parseInt(JSON.parse(res.value), 10) || 0) : 0;
+    }catch(e){
+      batchCounter = 0;
+    }
+  }
+
+  async function persistBatchCounter(){
+    try{
+      await window.storage.set(BATCH_COUNTER_KEY, JSON.stringify(batchCounter), false);
+    }catch(e){
+      console.error('Storage error', e);
+    }
+  }
+
+  function formatBatchNumber(date, n){
+    const monthAbbr = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    return monthAbbr + n;
+  }
+
+  // ---------- Inventory history (audit trail) ----------
+  const HISTORY_KEY = 'kitchen-inventory-history';
+  let inventoryHistory = [];
+
+  async function loadInventoryHistory(){
+    try{
+      const res = await window.storage.get(HISTORY_KEY, false);
+      inventoryHistory = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      inventoryHistory = [];
+    }
+    renderHistoryPanel();
+  }
+
+  async function persistInventoryHistory(){
+    try{
+      await window.storage.set(HISTORY_KEY, JSON.stringify(inventoryHistory), false);
+    }catch(e){
+      console.error('Storage error', e);
+    }
+  }
+
+  function logInventoryChange(itemName, uom, oldQty, newQty, reason){
+    inventoryHistory.unshift({
+      date: new Date().toISOString(),
+      user: currentUser || 'Unnamed user',
+      item: itemName,
+      uom: uom,
+      oldQty: oldQty,
+      newQty: newQty,
+      reason: reason || 'Manual stock update',
+      outOfStock: newQty <= 0
+    });
+    if(inventoryHistory.length > 300) inventoryHistory.length = 300;
+    persistInventoryHistory();
+    renderHistoryPanel();
+  }
+
+  // Note-only audit entry (no quantity change) — used to trace back WHY an
+  // ingredient ran out or blocked a production batch, per the "out of
+  // ingredients" tracking requirement.
+  function logStockEvent(itemName, uom, note){
+    inventoryHistory.unshift({
+      date: new Date().toISOString(),
+      user: currentUser || 'Unnamed user',
+      item: itemName,
+      uom: uom,
+      note: note,
+      outOfStock: true
+    });
+    if(inventoryHistory.length > 300) inventoryHistory.length = 300;
+    persistInventoryHistory();
+    renderHistoryPanel();
+  }
+
+  function renderHistoryPanel(){
+    const panel = document.getElementById('historyPanel');
+    if(!panel) return;
+    if(inventoryHistory.length === 0){
+      panel.innerHTML = '<div class="empty-state" style="padding:14px;">No stock changes recorded yet.</div>';
+      return;
+    }
+    panel.innerHTML = inventoryHistory.slice(0, 100).map(h=>{
+      const d = new Date(h.date);
+      const dateStr = isNaN(d) ? h.date : d.toLocaleString('en-PH', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+      const oosTag = h.outOfStock ? '<span class="oos-tag">OUT OF STOCK</span>' : '';
+      if(h.note){
+        return `
+          <div class="history-row note-row">
+            <span>${escapeHtml(dateStr)}</span>
+            <span class="h-user">${escapeHtml(h.user)}</span>
+            <span>${escapeHtml(h.item)} (${escapeHtml(h.uom)}): ${escapeHtml(h.note)}${oosTag}</span>
+            <span></span>
+          </div>
+        `;
+      }
+      const diff = (h.newQty - h.oldQty);
+      const diffStr = (diff >= 0 ? '+' : '') + diff.toLocaleString('en-PH',{maximumFractionDigits:2});
+      return `
+        <div class="history-row">
+          <span>${escapeHtml(dateStr)}</span>
+          <span class="h-user">${escapeHtml(h.user)}</span>
+          <span>${escapeHtml(h.item)}: ${h.oldQty} → ${h.newQty} ${escapeHtml(h.uom)}${oosTag}<br><span class="h-reason">${escapeHtml(h.reason || '')}</span></span>
+          <span class="h-change">${diffStr}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ---------- Inventory helpers ----------
+  function ingredientKey(name, uom){
+    return name.trim().toLowerCase() + '|' + uom;
+  }
+
+  function syncInventoryFromRecipes(){
+    const seen = {};
+    recipes.forEach(r => (r.ingredients || []).forEach(ing => {
+      const key = ingredientKey(ing.name, ing.uom);
+      if(!seen[key]) seen[key] = { name: ing.name, uom: ing.uom, unitPrice: ing.unitPrice };
+    }));
+    let changed = false;
+    Object.keys(seen).forEach(key => {
+      if(!inventory.find(i => i.key === key)){
+        inventory.push({ key: key, name: seen[key].name, uom: seen[key].uom, stock: 0 });
+        changed = true;
+      }
+    });
+    if(changed) persistInventory();
+  }
+
+  function getInventoryStock(name, uom){
+    const item = inventory.find(i => i.key === ingredientKey(name, uom));
+    return item ? (item.stock || 0) : 0;
+  }
+
+  // A representative unit price for an ingredient, taken from the most recent
+  // recipe that uses it — used to estimate replenishment cost.
+  function getIngredientUnitPrice(name, uom){
+    let price = 0;
+    recipes.forEach(r => (r.ingredients || []).forEach(ing => {
+      if(ingredientKey(ing.name, ing.uom) === ingredientKey(name, uom)) price = ing.unitPrice;
+    }));
+    return price;
+  }
+
+  // ---------- Production stock commitments ----------
+  // A plan is "committed" once its ingredients have been physically deducted
+  // from stock on hand (this happens the moment it has enough stock to enter
+  // Processing — see tryCommitPlan / syncProductionCommitments below). Before
+  // that, an unmet ("Hold") plan doesn't touch stock at all. This keeps the
+  // on-hand number always equal to what's truly left, instead of a separate
+  // virtual "reserved" pool that used to drift out of sync with the real
+  // plus/minus of stock.
+
+  // Quantity still NEEDED by plans that are on Hold (not yet committed, not
+  // validated) — shown to the user as "Needed (on hold)" rather than
+  // "Reserved", since nothing has actually been taken out of stock for these yet.
+  function getReservedQty(name, uom, excludePlanId){
+    let total = 0;
+    plans.forEach(p=>{
+      if(p.validated || p.stockCommitted) return;
+      if(excludePlanId && p.id === excludePlanId) return;
+      const recipe = recipes.find(r => r.id === p.recipeId);
+      if(!recipe) return;
+      (recipe.ingredients || []).forEach(ing=>{
+        if(ingredientKey(ing.name, ing.uom) === ingredientKey(name, uom)){
+          total += ing.qty * p.batches;
+        }
+      });
+    });
+    return total;
+  }
+
+  // Stock on hand already reflects every committed (Processing/Done) plan's
+  // usage, so availability for a NEW or edited plan just checks current stock.
+  function getAvailableStock(name, uom, excludePlanId){
+    return getInventoryStock(name, uom);
+  }
+
+  function computeAvailability(recipe, batches, excludePlanId){
+    const shortages = [];
+    (recipe.ingredients || []).forEach(ing => {
+      const required = ing.qty * batches;
+      const available = getAvailableStock(ing.name, ing.uom, excludePlanId);
+      if(available < required){
+        shortages.push({ name: ing.name, uom: ing.uom, required, available: Math.max(0, available) });
+      }
+    });
+    return { status: shortages.length === 0 ? 'go' : 'no-go', shortages };
+  }
+
+  // Deduct a plan's required ingredients from stock on hand right now, and
+  // remember exactly what was taken (committedIngredients) so it can be put
+  // back if the plan is later edited or deleted. opts.force floors at zero
+  // instead of refusing (used only when an Admin/Manager manually validates
+  // a plan that never had enough stock to auto-commit).
+  function commitPlanStock(plan, recipe, opts){
+    opts = opts || {};
+    const committed = [];
+    (recipe.ingredients || []).forEach(ing=>{
+      const key = ingredientKey(ing.name, ing.uom);
+      const invItem = inventory.find(i => i.key === key);
+      const required = ing.qty * plan.batches;
+      if(invItem){
+        const oldQty = invItem.stock || 0;
+        const newQty = opts.force ? Math.max(0, oldQty - required) : (oldQty - required);
+        const taken = oldQty - newQty;
+        invItem.stock = newQty;
+        committed.push({ key: key, name: invItem.name, uom: invItem.uom, qty: taken });
+        logInventoryChange(invItem.name, invItem.uom, oldQty, newQty, 'Production reserved · Batch #' + (plan.batchNumber || ''));
+        if(newQty <= 0) logStockEvent(invItem.name, invItem.uom, 'Ran out while reserving Batch #' + (plan.batchNumber || '') + ' ("' + plan.eventName + '")');
+      } else {
+        committed.push({ key: key, name: ing.name, uom: ing.uom, qty: 0 });
+      }
+    });
+    plan.stockCommitted = true;
+    plan.committedIngredients = committed;
+  }
+
+  // Put a previously committed plan's ingredients back on the shelf — used
+  // when that plan is edited or deleted so its stock isn't lost.
+  function releasePlanStock(plan){
+    if(!plan.stockCommitted) return;
+    (plan.committedIngredients || []).forEach(c=>{
+      if(!c.qty) return;
+      const invItem = inventory.find(i => i.key === c.key);
+      if(invItem){
+        const oldQty = invItem.stock || 0;
+        const newQty = oldQty + c.qty;
+        invItem.stock = newQty;
+        logInventoryChange(invItem.name, invItem.uom, oldQty, newQty, 'Production released · Batch #' + (plan.batchNumber || ''));
+      }
+    });
+    plan.stockCommitted = false;
+    plan.committedIngredients = [];
+  }
+
+  // Attempt to move ONE plan from Hold into Processing by committing its
+  // stock, if there's currently enough. Returns true if it committed.
+  function tryCommitPlan(plan){
+    if(plan.validated || plan.stockCommitted) return true;
+    const recipe = recipes.find(r => r.id === plan.recipeId);
+    if(!recipe) return false;
+    const { status } = computeAvailability(recipe, plan.batches, plan.id);
+    if(status !== 'go') return false;
+    commitPlanStock(plan, recipe);
+    return true;
+  }
+
+  // Log one traceable "why is this ingredient short" entry per missing item
+  // when a plan can't be committed — used to explain Hold status later.
+  function logHoldShortages(recipe, plan){
+    const { shortages } = computeAvailability(recipe, plan.batches, plan.id);
+    shortages.forEach(s=>{
+      logStockEvent(s.name, s.uom, 'Short ' + (s.required - s.available).toLocaleString('en-PH',{maximumFractionDigits:2}) + ' ' + s.uom + ' for Batch #' + (plan.batchNumber||'') + ' ("' + plan.eventName + '") — on Hold.');
+    });
+  }
+
+  // Walk every Hold plan (oldest batch date first) and commit whichever now
+  // fit, given current stock. Call this after anything that could free up or
+  // add stock: a manual stock edit, a plan being deleted/edited, etc.
+  async function syncProductionCommitments(){
+    const pending = plans
+      .filter(p => !p.validated && !p.stockCommitted)
+      .sort((a,b)=> ((a.batchDate||'')+(a.startTime||'')).localeCompare((b.batchDate||'')+(b.startTime||'')));
+    let changed = false;
+    pending.forEach(p=>{
+      if(tryCommitPlan(p)) changed = true;
+    });
+    if(changed){
+      await persistInventory();
+      await persistPlans();
+    }
+  }
+
+  // Aggregate replenishment need across all Hold (uncommitted, unvalidated)
+  // production plans, compared against raw stock on hand — used to budget
+  // procurement. Committed plans already have their stock, so they're excluded.
+  function computeStockoutSummary(){
+    const need = {}; // key -> { name, uom, required }
+    plans.forEach(p=>{
+      if(p.validated || p.stockCommitted) return;
+      const recipe = recipes.find(r => r.id === p.recipeId);
+      if(!recipe) return;
+      (recipe.ingredients || []).forEach(ing=>{
+        const key = ingredientKey(ing.name, ing.uom);
+        if(!need[key]) need[key] = { name: ing.name, uom: ing.uom, required: 0 };
+        need[key].required += ing.qty * p.batches;
+      });
+    });
+    const items = [];
+    let totalCost = 0;
+    Object.keys(need).forEach(key=>{
+      const n = need[key];
+      const onHand = getInventoryStock(n.name, n.uom);
+      const shortage = n.required - onHand;
+      if(shortage > 0){
+        const unitPrice = getIngredientUnitPrice(n.name, n.uom);
+        const cost = shortage * unitPrice;
+        totalCost += cost;
+        items.push({ name: n.name, uom: n.uom, required: n.required, onHand, shortage, unitPrice, cost });
+      }
+    });
+    items.sort((a,b)=>b.cost - a.cost);
+    return { items, totalCost };
+  }
+
+  function renderInventoryTable(){
+    const wrap = document.getElementById('inventoryTableWrap');
+    if(!wrap) return;
+
+    const sortedInv = [...inventory].sort((a,b)=>a.name.localeCompare(b.name));
+    const outOfStock = inventory.filter(i => (i.stock || 0) <= 0).length;
+    const blockedCount = plans.filter(p => !p.validated && !p.stockCommitted).length;
+
+    // 8.1 — "Tracked ingredients" KPI repurposed to total cost of out-of-stock items,
+    // valued against what's currently needed by active production plans.
+    const stockoutSummary = computeStockoutSummary();
+    const outOfStockCost = stockoutSummary.items
+      .filter(it => it.onHand <= 0)
+      .reduce((s,it)=>s+it.cost, 0);
+
+    const kpiTracked = document.getElementById('invKpiTracked');
+    const kpiOut = document.getElementById('invKpiOut');
+    const kpiBlocked = document.getElementById('invKpiBlocked');
+    if(kpiTracked) kpiTracked.textContent = PHP(outOfStockCost);
+    if(kpiOut) kpiOut.textContent = outOfStock;
+    if(kpiBlocked) kpiBlocked.textContent = blockedCount;
+
+    if(sortedInv.length === 0){
+      wrap.innerHTML = '<div class="empty-state" style="background:var(--surface);border-radius:3px;">No ingredients tracked yet. Save a recipe with ingredients on the Recipe Cards tab and they\'ll appear here automatically.</div>';
+      return;
+    }
+
+    const searchInput = document.getElementById('invSearchInput');
+    const query = (searchInput && searchInput.value || '').trim().toLowerCase();
+    const filteredInv = query ? sortedInv.filter(i => i.name.toLowerCase().includes(query)) : sortedInv;
+
+    const noStock = filteredInv.filter(i => (i.stock || 0) <= 0);
+    const inStock = filteredInv.filter(i => (i.stock || 0) > 0);
+
+    function getLinkedPlansForIngredient(key){
+      // Plans still waiting on this ingredient (Hold) — committed/Done plans
+      // already took their share out of stock, so they're not "waiting" anymore.
+      return plans.filter(p=>{
+        if(p.validated || p.stockCommitted) return false;
+        const recipe = recipes.find(r => r.id === p.recipeId);
+        if(!recipe) return false;
+        return (recipe.ingredients || []).some(ing => ingredientKey(ing.name, ing.uom) === key);
+      });
+    }
+
+    function invCard(item){
+      const linked = getLinkedPlansForIngredient(item.key);
+      const needed = getReservedQty(item.name, item.uom);
+      const linkedHtml = linked.length > 0
+        ? `<div class="inv-linked">
+             <span class="inv-linked-label">Waiting on this (Hold):</span>
+             ${linked.map(p => `<span class="batch-tag" title="${escapeHtml(p.eventName)}">#${escapeHtml(p.batchNumber || '—')}</span>`).join('')}
+           </div>`
+        : `<div class="inv-linked inv-linked-empty">Not needed by any Hold production</div>`;
+      const availabilityHtml = needed > 0
+        ? `<div class="inv-availability">
+             <span>On hand: <b>${(item.stock||0).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
+             <span>Needed (on hold): <b>${needed.toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
+             <span>Short by: <b>${Math.max(0,needed-(item.stock||0)).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
+           </div>`
+        : '';
+      return `
+        <div class="kanban-card" data-key="${escapeHtml(item.key)}">
+          <div class="rname">${escapeHtml(item.name)}</div>
+          <div class="rmeta">${escapeHtml(item.uom)}</div>
+          <div class="inv-stock-row">
+            <label>Stock on hand</label>
+            <input type="number" class="stock-input" min="0" step="0.01" value="${item.stock || 0}" ${canEdit() ? '' : 'disabled title="Your access level does not allow editing stock."'}>
+          </div>
+          ${availabilityHtml}
+          ${linkedHtml}
+        </div>
+      `;
+    }
+
+    function invColumn(title, cssClass, items){
+      const cards = items.length === 0
+        ? '<div class="kanban-empty">Nothing here.</div>'
+        : `<div class="kanban-cards">${items.map(invCard).join('')}</div>`;
+      return `
+        <div class="kanban-col ${cssClass}">
+          <div class="kanban-col-head">
+            <h3>${title}</h3>
+            <span class="kanban-count">${items.length}</span>
+          </div>
+          ${cards}
+        </div>
+      `;
+    }
+
+    wrap.innerHTML = `
+      <div class="kanban-board inv-board">
+        ${invColumn('NO STOCK', 'hold', noStock)}
+        ${invColumn('IN STOCK', 'processing', inStock)}
+      </div>
+    `;
+
+    wrap.querySelectorAll('.stock-input').forEach(input=>{
+      input.addEventListener('change', async (e)=>{
+        const key = e.target.closest('.kanban-card').dataset.key;
+        const item = inventory.find(i => i.key === key);
+        if(!item) return;
+        const oldQty = item.stock || 0;
+        const newQty = parseFloat(e.target.value) || 0;
+        if(newQty === oldQty) return;
+        const confirmed = window.confirm(
+          'Change stock on hand for "' + item.name + '" from ' + oldQty + ' to ' + newQty + ' ' + item.uom + '? This will be recorded in the change history.'
+        );
+        if(!confirmed){
+          e.target.value = oldQty;
+          return;
+        }
+        item.stock = newQty;
+        await persistInventory();
+        logInventoryChange(item.name, item.uom, oldQty, newQty, 'Manual stock update');
+        // Stock went up — see if any Hold production plans can now proceed.
+        await syncProductionCommitments();
+        renderInventoryTable();
+        renderProductionList();
+        updateRunEstimate();
+      });
+    });
+  }
+
+  const invSearchInputEl = document.getElementById('invSearchInput');
+  if(invSearchInputEl) invSearchInputEl.addEventListener('input', renderInventoryTable);
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'ccp') renderCcpBoard();
+      if(btn.dataset.tab === 'procurement') renderProcurement();
+      if(btn.dataset.tab === 'production'){ refreshRecipeSelect(); syncProductionCommitments().then(renderProductionList); }
+      if(btn.dataset.tab === 'packages') renderPackageList();
+      if(btn.dataset.tab === 'inventory') renderInventoryTable();
+    });
+  });
+
+  // ---------- Ingredient rows ----------
+  const rowsContainer = document.getElementById('ingredientRows');
+
+  function makeUomOptions(selected){
+    return UOMS.map(u => `<option value="${u}" ${u===selected?'selected':''}>${u}</option>`).join('');
+  }
+
+  function addIngredientRow(data){
+    data = data || {};
+    const id = 'row-' + (rowIdCounter++);
+    const row = document.createElement('div');
+    row.className = 'ingredient-row';
+    row.dataset.rowId = id;
+    row.innerHTML = `
+      <div>
+        <span class="mini-label">Ingredient</span>
+        <input type="text" class="f-name" placeholder="e.g. Chicken thigh" value="${data.name ? escapeHtml(data.name) : ''}">
+      </div>
+      <div>
+        <span class="mini-label">Qty</span>
+        <input type="number" class="f-qty" min="0" step="0.01" placeholder="0" value="${data.qty ?? ''}">
+      </div>
+      <div>
+        <span class="mini-label">UOM</span>
+        <select class="f-uom">${makeUomOptions(data.uom)}</select>
+      </div>
+      <div>
+        <span class="mini-label">Unit price ₱</span>
+        <input type="number" class="f-price" min="0" step="0.01" placeholder="0.00" value="${data.unitPrice ?? ''}">
+      </div>
+      <div class="line-cost">₱0.00</div>
+      <button type="button" class="row-remove" title="Remove ingredient">×</button>
+    `;
+    rowsContainer.appendChild(row);
+
+    row.querySelectorAll('input, select').forEach(el=>{
+      el.addEventListener('input', updateSummary);
+    });
+    row.querySelector('.row-remove').addEventListener('click', ()=>{
+      row.remove();
+      updateSummary();
+    });
+    updateSummary();
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  document.getElementById('addIngredientBtn').addEventListener('click', ()=>addIngredientRow());
+
+  document.getElementById('recipeYield').addEventListener('input', updateSummary);
+
+  function getIngredientRowsData(){
+    return Array.from(rowsContainer.querySelectorAll('.ingredient-row')).map(row=>{
+      const name = row.querySelector('.f-name').value.trim();
+      const qty = parseFloat(row.querySelector('.f-qty').value) || 0;
+      const uom = row.querySelector('.f-uom').value;
+      const unitPrice = parseFloat(row.querySelector('.f-price').value) || 0;
+      const lineCost = qty * unitPrice;
+      row.querySelector('.line-cost').textContent = PHP(lineCost);
+      return { name, qty, uom, unitPrice, lineCost };
+    });
+  }
+
+  function updateSummary(){
+    const rows = getIngredientRowsData();
+    const validRows = rows.filter(r=>r.name);
+    const total = rows.reduce((s,r)=>s+r.lineCost,0);
+    const yieldVal = parseFloat(document.getElementById('recipeYield').value) || 0;
+    const perPax = yieldVal > 0 ? total / yieldVal : 0;
+
+    document.getElementById('sumCount').textContent = validRows.length;
+    document.getElementById('sumTotal').textContent = PHP(total);
+    document.getElementById('sumYield').textContent = yieldVal > 0 ? (yieldVal + ' pax') : '— pax';
+    document.getElementById('sumPerPax').innerHTML = PHP(perPax);
+
+    renderPerPaxTable(validRows, yieldVal);
+  }
+
+  function renderPerPaxTable(rows, yieldVal){
+    const body = document.getElementById('perPaxBody');
+    if(rows.length === 0 || yieldVal <= 0){
+      body.innerHTML = `<tr><td colspan="4" class="perpax-empty">${
+        rows.length === 0 ? 'Add ingredients to see the per-pax breakdown.' : 'Enter a yield greater than 0 to divide per pax.'
+      }</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(r=>{
+      const qtyPerPax = r.qty / yieldVal;
+      const pricePerPax = r.lineCost / yieldVal;
+      return `
+        <tr>
+          <td class="ing-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</td>
+          <td class="num">${qtyPerPax.toLocaleString('en-PH',{maximumFractionDigits:3})}</td>
+          <td>${escapeHtml(r.uom)}</td>
+          <td class="num">${PHP(pricePerPax)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // ---------- Save / Edit recipe ----------
+  const formMsg = document.getElementById('formMsg');
+  const editingBanner = document.getElementById('editingBanner');
+  const editingNameEl = document.getElementById('editingName');
+  const saveBtn = document.getElementById('saveRecipeBtn');
+
+  function resetForm(){
+    document.getElementById('recipeName').value = '';
+    document.getElementById('recipeCategory').value = '';
+    document.getElementById('recipeYield').value = '';
+    rowsContainer.innerHTML = '';
+    addIngredientRow();
+    updateSummary();
+  }
+
+  function enterEditMode(recipe){
+    editingId = recipe.id;
+    document.getElementById('recipeName').value = recipe.name;
+    document.getElementById('recipeCategory').value = recipe.category;
+    document.getElementById('recipeYield').value = recipe.yieldVal;
+    rowsContainer.innerHTML = '';
+    recipe.ingredients.forEach(ing => addIngredientRow({
+      name: ing.name, qty: ing.qty, uom: ing.uom, unitPrice: ing.unitPrice
+    }));
+    updateSummary();
+
+    editingBanner.style.display = 'flex';
+    editingNameEl.textContent = recipe.name;
+    saveBtn.textContent = 'Update recipe card';
+    formMsg.textContent = '';
+    formMsg.className = 'form-msg';
+
+    document.querySelector('.tab-btn[data-tab="builder"]').click();
+    document.getElementById('recipeName').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  function exitEditMode(){
+    editingId = null;
+    editingBanner.style.display = 'none';
+    saveBtn.textContent = 'Save recipe card';
+  }
+
+  document.getElementById('cancelEditBtn').addEventListener('click', ()=>{
+    exitEditMode();
+    resetForm();
+    formMsg.textContent = 'Edit cancelled.';
+    formMsg.className = 'form-msg';
+  });
+
+  saveBtn.addEventListener('click', async ()=>{
+    const name = document.getElementById('recipeName').value.trim();
+    const category = document.getElementById('recipeCategory').value;
+    const yieldVal = parseFloat(document.getElementById('recipeYield').value) || 0;
+    const rows = getIngredientRowsData().filter(r=>r.name && r.qty > 0);
+
+    formMsg.className = 'form-msg';
+    formMsg.textContent = '';
+
+    if(!name){
+      formMsg.textContent = 'Add a recipe name before saving.';
+      formMsg.className = 'form-msg err';
+      return;
+    }
+    if(!category){
+      formMsg.textContent = 'Select a category so this recipe shows up in the Recipe Manual.';
+      formMsg.className = 'form-msg err';
+      return;
+    }
+    if(rows.length === 0){
+      formMsg.textContent = 'Add at least one ingredient with a quantity.';
+      formMsg.className = 'form-msg err';
+      return;
+    }
+    if(yieldVal <= 0){
+      formMsg.textContent = 'Enter a yield greater than 0 to calculate cost per pax.';
+      formMsg.className = 'form-msg err';
+      return;
+    }
+
+    const total = rows.reduce((s,r)=>s+r.lineCost,0);
+
+    if(editingId){
+      const idx = recipes.findIndex(r => r.id === editingId);
+      if(idx !== -1){
+        recipes[idx] = {
+          ...recipes[idx],
+          name, category, yieldVal,
+          ingredients: rows,
+          totalCost: total,
+          costPerPax: total / yieldVal,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      await persistRecipes();
+      renderRecipeList();
+      renderProcurement();
+
+      formMsg.textContent = 'Updated "' + name + '".';
+      formMsg.className = 'form-msg ok';
+      exitEditMode();
+      resetForm();
+    } else {
+      const recipe = {
+        id: 'r-' + Date.now(),
+        name, category, yieldVal,
+        ingredients: rows,
+        totalCost: total,
+        costPerPax: total / yieldVal,
+        savedAt: new Date().toISOString()
+      };
+      recipes.unshift(recipe);
+      await persistRecipes();
+      renderRecipeList();
+      renderProcurement();
+
+      formMsg.textContent = 'Saved "' + name + '" to your recipe cards.';
+      formMsg.className = 'form-msg ok';
+      resetForm();
+    }
+  });
+
+  // ---------- Recipe list ----------
+  const recipeListEl = document.getElementById('recipeList');
+  const recipeSearchInput = document.getElementById('recipeSearchInput');
+  recipeSearchInput.addEventListener('input', renderRecipeList);
+
+  function itemActionsHtml(editAction, deleteAction, viewAction){
+    const viewBtn = viewAction ? `<button class="view" data-action="${viewAction}">View</button>` : '';
+    const editBtn = canEdit() ? `<button class="edit" data-action="${editAction}">Edit</button>` : '';
+    const delBtn = canDelete() ? `<button class="del" data-action="${deleteAction}">Delete</button>` : '';
+    return (viewBtn || editBtn || delBtn) ? `<div class="item-actions">${viewBtn}${editBtn}${delBtn}</div>` : '';
+  }
+
+  // ---------- Generic read-only "View" modal (recipe cards / production plans / packages) ----------
+  const viewDetailOverlayEl = document.getElementById('viewDetailOverlay');
+  function openViewModal(title, bodyHtml){
+    document.getElementById('viewDetailTitle').textContent = title;
+    document.getElementById('viewDetailBody').innerHTML = bodyHtml;
+    viewDetailOverlayEl.style.display = 'flex';
+  }
+  document.getElementById('closeViewDetailBtn').addEventListener('click', ()=>{
+    viewDetailOverlayEl.style.display = 'none';
+  });
+
+  function viewRecipeDetail(r){
+    const rows = (r.ingredients||[]).map(ing => `
+      <tr>
+        <td>${escapeHtml(ing.name)}</td>
+        <td>${ing.qty} ${escapeHtml(ing.uom)}</td>
+        <td>${PHP(ing.unitPrice)}</td>
+        <td>${PHP(ing.lineCost)}</td>
+      </tr>
+    `).join('');
+    openViewModal(r.name, `
+      <p><span class="cat-tag">${escapeHtml(r.category)}</span> · yield ${r.yieldVal} pax · cost/pax ${PHP(r.costPerPax)}</p>
+      <table class="access-table">
+        <thead><tr><th>Ingredient</th><th>Qty</th><th>Unit price</th><th>Line cost</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4">No ingredients recorded.</td></tr>'}</tbody>
+      </table>
+      <p style="margin-top:10px;font-weight:600;">Total cost: ${PHP(r.totalCost)}</p>
+    `);
+  }
+
+  function viewProductionDetail(p){
+    const recipe = recipes.find(r => r.id === p.recipeId);
+    const rows = recipe ? (recipe.ingredients||[]).map(ing => `
+      <tr>
+        <td>${escapeHtml(ing.name)}</td>
+        <td>${(ing.qty * p.batches).toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(ing.uom)}</td>
+      </tr>
+    `).join('') : '';
+    const statusLabel = p.validated ? 'Done' : (p.stockCommitted ? 'Processing (GO)' : 'Hold (NO-GO)');
+    openViewModal(p.eventName, `
+      <p><span class="cat-tag">${escapeHtml(p.category||'Uncategorized')}</span> · Batch #${escapeHtml(p.batchNumber||'—')} · Status: ${escapeHtml(statusLabel)}</p>
+      <p style="font-size:12.5px;color:var(--ink-soft);">Recipe: ${escapeHtml(p.recipeName||'—')} · ${p.pax} pax · ${p.batches} batch${p.batches===1?'':'es'} · batch date ${formatDateDisplay(p.batchDate)}</p>
+      <table class="access-table">
+        <thead><tr><th>Ingredient</th><th>Qty needed</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="2">Recipe not found.</td></tr>'}</tbody>
+      </table>
+      <p style="margin-top:10px;font-weight:600;">Estimated cost: ${PHP(p.estCost)}</p>
+    `);
+  }
+
+  function viewPackageDetail(pkg){
+    const foodRows = (pkg.foodItems||[]).map(f => `<tr><td>${escapeHtml(f.recipeName||f.desc||'—')}</td><td>${PHP(f.price||0)}</td></tr>`).join('');
+    const svcRows = (pkg.serviceItems||[]).filter(s=>s.qty>0).map(s => `<tr><td>${escapeHtml(s.role)}</td><td>${s.qty} × ${PHP(s.price)}</td></tr>`).join('');
+    const miscRows = (pkg.miscItems||[]).map(m => `<tr><td>${escapeHtml(m.desc||'—')}</td><td>${PHP(m.price||0)}</td></tr>`).join('');
+    openViewModal(pkg.name, `
+      ${pkg.soNumber ? `<p><span class="so-tag">SO# ${escapeHtml(pkg.soNumber)}</span></p>` : ''}
+      <p style="font-size:12.5px;color:var(--ink-soft);">${pkg.pax ? pkg.pax + ' pax · ' : ''}food ×3/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(pkg.serviceTotal||0)} · misc (flat): ${PHP(pkg.miscTotal)}</p>
+      <p style="font-weight:600;margin:10px 0 4px;">Food items</p>
+      <table class="access-table"><tbody>${foodRows || '<tr><td>None</td></tr>'}</tbody></table>
+      <p style="font-weight:600;margin:10px 0 4px;">Service roles</p>
+      <table class="access-table"><tbody>${svcRows || '<tr><td>None</td></tr>'}</tbody></table>
+      <p style="font-weight:600;margin:10px 0 4px;">Miscellaneous</p>
+      <table class="access-table"><tbody>${miscRows || '<tr><td>None</td></tr>'}</tbody></table>
+      <p style="margin-top:10px;font-weight:600;">Grand total: ${PHP(pkg.grandTotal)}</p>
+    `);
+  }
+
+  function renderRecipeList(){
+    refreshRecipeSelect();
+    renderCcpBoard();
+    syncInventoryFromRecipes();
+    renderInventoryTable();
+    refreshFoodRecipeOptions();
+    updatePackageSummary();
+    if(recipes.length === 0){
+      recipeListEl.innerHTML = '<div class="empty-state">No recipe cards saved yet. Build one above and save it to start tracking costs.</div>';
+      return;
+    }
+    const query = (recipeSearchInput.value || '').trim().toLowerCase();
+    const visible = query
+      ? recipes.filter(r => r.name.toLowerCase().includes(query) || (r.category || '').toLowerCase().includes(query))
+      : recipes;
+
+    if(visible.length === 0){
+      recipeListEl.innerHTML = `<div class="empty-state">No saved recipe cards match "${escapeHtml(recipeSearchInput.value)}".</div>`;
+      return;
+    }
+
+    recipeListEl.innerHTML = visible.map(r => `
+      <div class="recipe-item" data-id="${r.id}">
+        <div>
+          <span class="cat-tag">${escapeHtml(r.category)}</span>
+          <div class="rname">${escapeHtml(r.name)}</div>
+          <div class="rmeta">${r.ingredients.length} ingredients · yield ${r.yieldVal} pax · total ${PHP(r.totalCost)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="rprice">${PHP(r.costPerPax)} <span style="color:var(--steel);font-weight:400;font-size:11px;">/ pax</span></div>
+          ${itemActionsHtml('edit','delete','view')}
+        </div>
+      </div>
+    `).join('');
+
+    recipeListEl.querySelectorAll('[data-action="view"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.recipe-item').dataset.id;
+        const recipe = recipes.find(r => r.id === id);
+        if(recipe) viewRecipeDetail(recipe);
+      });
+    });
+
+    recipeListEl.querySelectorAll('[data-action="delete"]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const id = e.target.closest('.recipe-item').dataset.id;
+        if(editingId === id){
+          exitEditMode();
+          resetForm();
+        }
+        recipes = recipes.filter(r => r.id !== id);
+        await persistRecipes();
+        renderRecipeList();
+        renderProcurement();
+      });
+    });
+
+    recipeListEl.querySelectorAll('[data-action="edit"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.recipe-item').dataset.id;
+        const recipe = recipes.find(r => r.id === id);
+        if(recipe) enterEditMode(recipe);
+      });
+    });
+  }
+
+  // ---------- Tab 2: Procurement ----------
+  const filterCategoryEl = document.getElementById('filterCategory');
+
+  function refreshCategoryFilter(){
+    const cats = [...new Set(recipes.map(r=>r.category))].sort();
+    const current = filterCategoryEl.value;
+    filterCategoryEl.innerHTML = '<option value="">All categories</option>' +
+      cats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if(cats.includes(current)) filterCategoryEl.value = current;
+  }
+
+  filterCategoryEl.addEventListener('change', renderProcurement);
+
+  document.querySelectorAll('table.proc-table').length; // no-op init guard
+
+  function renderProcurement(){
+    refreshCategoryFilter();
+    const activeCategory = filterCategoryEl.value;
+    const relevantRecipes = recipes.filter(r => !activeCategory || r.category === activeCategory);
+
+    // Aggregate by ingredient name + UOM
+    const agg = {};
+    relevantRecipes.forEach(r=>{
+      r.ingredients.forEach(ing=>{
+        const key = ing.name.trim().toLowerCase() + '|' + ing.uom;
+        if(!agg[key]){
+          agg[key] = { name: ing.name, uom: ing.uom, qty: 0, cost: 0, recipes: new Set() };
+        }
+        agg[key].qty += ing.qty;
+        agg[key].cost += ing.lineCost;
+        agg[key].recipes.add(r.name);
+      });
+    });
+
+    const rowsArr = Object.values(agg);
+
+    // ---- 4-KPI row: recipes counted / distinct ingredients / stock-out / procurement budget ----
+    const stockoutSummary = computeStockoutSummary();
+    document.getElementById('kpiRecipes').textContent = relevantRecipes.length;
+    document.getElementById('kpiIngredients').textContent = inventory.length;
+    document.getElementById('kpiStockOut').textContent = stockoutSummary.items.length;
+    document.getElementById('kpiValue').textContent = PHP(stockoutSummary.totalCost);
+
+    const stockoutCard = document.getElementById('stockoutCard');
+    const stockoutListEl = document.getElementById('stockoutList');
+    if(stockoutSummary.items.length === 0){
+      stockoutCard.style.display = 'none';
+    } else {
+      stockoutCard.style.display = 'block';
+      stockoutListEl.innerHTML = stockoutSummary.items.map(it => `
+        <div class="stockout-row">
+          <div>
+            <div class="so-name">${escapeHtml(it.name)} <span class="stockout-tag">SHORT ${it.shortage.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)}</span></div>
+            <div class="so-meta">need ${it.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)} · have ${it.onHand.toLocaleString('en-PH',{maximumFractionDigits:2})}</div>
+          </div>
+          <div class="so-cost">${PHP(it.cost)}</div>
+        </div>
+      `).join('');
+    }
+
+    const wrap = document.getElementById('procTableWrap');
+
+    if(rowsArr.length === 0){
+      wrap.innerHTML = '<div class="empty-state" style="background:var(--surface);border-radius:3px;">No ingredient data yet. Save a recipe card in the first tab to populate procurement planning.</div>';
+      return;
+    }
+
+    // sort
+    rowsArr.sort((a,b)=>{
+      let av, bv;
+      if(sortState.key === 'name'){ av=a.name.toLowerCase(); bv=b.name.toLowerCase(); }
+      else if(sortState.key === 'qty'){ av=a.qty; bv=b.qty; }
+      else if(sortState.key === 'cost'){ av=a.cost; bv=b.cost; }
+      else { av=a.recipes.size; bv=b.recipes.size; }
+      if(av < bv) return -1*sortState.dir;
+      if(av > bv) return 1*sortState.dir;
+      return 0;
+    });
+
+    wrap.innerHTML = `
+      <table class="proc-table">
+        <colgroup>
+          <col class="col-name">
+          <col class="col-num">
+          <col class="col-num">
+          <col class="col-num">
+        </colgroup>
+        <thead>
+          <tr>
+            <th data-key="name">Ingredient</th>
+            <th data-key="qty" class="num">Total qty needed</th>
+            <th data-key="cost" class="num">Estimated cost</th>
+            <th data-key="recipes" class="num">Recipes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsArr.map(r=>`
+            <tr>
+              <td>${escapeHtml(r.name)}
+                <div class="used-in">used in: ${[...r.recipes].map(escapeHtml).join(', ')}</div>
+              </td>
+              <td class="num">${r.qty.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(r.uom)}</td>
+              <td class="num">${PHP(r.cost)}</td>
+              <td class="num">${r.recipes.size}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    wrap.querySelectorAll('th[data-key]').forEach(th=>{
+      th.addEventListener('click', ()=>{
+        const key = th.dataset.key;
+        if(sortState.key === key) sortState.dir *= -1;
+        else { sortState.key = key; sortState.dir = 1; }
+        renderProcurement();
+      });
+    });
+  }
+
+  // ---------- Recipe Manual / CCP board ----------
+  const COURSES = ['Appetizer','Soup','Bread','Salad','Beef Entree','Pork Entree','Chicken Entree','Seafood','Pasta','Dessert','Beverage','Sauce'];
+  let ccpSelection = {};
+  const ccpBoardEl = document.getElementById('ccpBoard');
+
+  function slugCourse(course){
+    return course.replace(/[^a-zA-Z0-9]+/g,'-');
+  }
+
+  function renderCcpBoard(){
+    ccpBoardEl.innerHTML = COURSES.map(course=>{
+      const options = recipes.filter(r => r.category === course);
+      const selectedId = ccpSelection[course] || '';
+      return `
+        <div class="ccp-column" data-course="${escapeHtml(course)}">
+          <div class="ccp-col-header">${escapeHtml(course)}</div>
+          <select class="ccp-select" ${options.length ? '' : 'disabled'}>
+            <option value="">${options.length ? 'Select recipe…' : 'No recipes yet'}</option>
+            ${options.map(r=>`<option value="${r.id}" ${r.id===selectedId?'selected':''}>${escapeHtml(r.name)}</option>`).join('')}
+          </select>
+          <div class="ccp-detail" id="ccp-detail-${slugCourse(course)}"></div>
+        </div>
+      `;
+    }).join('');
+
+    ccpBoardEl.querySelectorAll('.ccp-column').forEach(col=>{
+      const course = col.dataset.course;
+      const select = col.querySelector('.ccp-select');
+      select.addEventListener('change', ()=>{
+        ccpSelection[course] = select.value;
+        renderCcpDetail(course);
+      });
+      renderCcpDetail(course);
+    });
+  }
+
+  function renderCcpDetail(course){
+    const container = document.getElementById('ccp-detail-' + slugCourse(course));
+    if(!container) return;
+    const id = ccpSelection[course];
+    const recipe = recipes.find(r => r.id === id);
+
+    if(!recipe){
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="ccp-recipe-name">${escapeHtml(recipe.name)}</div>
+      <div class="ccp-meta">yield ${recipe.yieldVal} pax · ${PHP(recipe.costPerPax)} / pax</div>
+      <div class="ccp-ing-list">
+        ${recipe.ingredients.map(ing => `
+          <div class="ccp-ing-row">
+            <span>${escapeHtml(ing.name)}</span>
+            <span>${ing.qty} ${escapeHtml(ing.uom)}</span>
+          </div>
+        `).join('')}
+      </div>
+      <label class="ccp-label">Critical control points</label>
+      <textarea class="ccp-textarea" rows="4" placeholder="e.g. Cook to internal temp 74°C. Hold hot above 60°C. Cool leftovers within 4 hrs.">${escapeHtml(recipe.ccpNotes || '')}</textarea>
+      <button class="ccp-save-btn" type="button">Save CCP notes</button>
+      <div class="ccp-save-msg"></div>
+    `;
+
+    container.querySelector('.ccp-save-btn').addEventListener('click', async ()=>{
+      const notes = container.querySelector('.ccp-textarea').value;
+      const idx = recipes.findIndex(r => r.id === recipe.id);
+      if(idx !== -1){
+        recipes[idx].ccpNotes = notes;
+        await persistRecipes();
+        const msg = container.querySelector('.ccp-save-msg');
+        msg.textContent = 'Saved to recipe manual.';
+        setTimeout(()=>{ if(msg) msg.textContent = ''; }, 2500);
+      }
+    });
+  }
+
+  // ---------- Tab 3: Production Planning ----------
+  const prodRecipeEl = document.getElementById('prodRecipe');
+  const prodPaxEl = document.getElementById('prodPax');
+  const recipeHintEl = document.getElementById('recipeHint');
+  const prodFormMsg = document.getElementById('prodFormMsg');
+  const editingProdBanner = document.getElementById('editingProdBanner');
+  const editingProdNameEl = document.getElementById('editingProdName');
+  const saveProdBtn = document.getElementById('saveProdBtn');
+  const filterStationEl = document.getElementById('filterStation');
+  const productionBoardEl = document.getElementById('productionBoard');
+
+  function refreshRecipeSelect(){
+    const current = prodRecipeEl.value;
+    prodRecipeEl.innerHTML = '<option value="">Select a saved recipe…</option>' +
+      recipes.map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.category)})</option>`).join('');
+    if(recipes.some(r=>r.id === current)) prodRecipeEl.value = current;
+    updateRunEstimate();
+  }
+
+  function updateRunEstimate(){
+    const recipe = recipes.find(r => r.id === prodRecipeEl.value);
+    const pax = parseFloat(prodPaxEl.value) || 0;
+
+    if(!recipe){
+      recipeHintEl.textContent = '';
+      document.getElementById('prodYieldDisplay').textContent = '— pax';
+      document.getElementById('prodBatches').textContent = '0';
+      document.getElementById('prodCostPerPax').textContent = '₱0.00';
+      document.getElementById('prodEstCost').innerHTML = '₱0.00';
+      renderAvailabilityCheck(null, 0);
+      return;
+    }
+
+    recipeHintEl.textContent = 'Yield: ' + recipe.yieldVal + ' pax · Cost/pax: ' + PHP(recipe.costPerPax);
+    const batches = pax > 0 ? Math.ceil(pax / recipe.yieldVal) : 0;
+    const estCost = batches * recipe.totalCost;
+
+    document.getElementById('prodYieldDisplay').textContent = recipe.yieldVal + ' pax';
+    document.getElementById('prodBatches').textContent = batches;
+    document.getElementById('prodCostPerPax').textContent = PHP(recipe.costPerPax);
+    document.getElementById('prodEstCost').innerHTML = PHP(estCost);
+
+    renderAvailabilityCheck(recipe, batches);
+  }
+
+  function renderAvailabilityCheck(recipe, batches){
+    const badge = document.getElementById('prodAvailBadge');
+    const list = document.getElementById('prodShortageList');
+    if(!recipe || batches <= 0){
+      badge.textContent = '—';
+      badge.className = 'avail-badge neutral';
+      list.innerHTML = '';
+      return;
+    }
+    const { status, shortages } = computeAvailability(recipe, batches, editingProdId);
+    if(status === 'go'){
+      badge.textContent = '✅ GO — all ingredients available';
+      badge.className = 'avail-badge go';
+      list.innerHTML = '';
+    } else {
+      badge.textContent = '⚠ NO-GO — short on ingredients';
+      badge.className = 'avail-badge nogo';
+      list.innerHTML = shortages.map(s => `
+        <div class="shortage-row">
+          <span>${escapeHtml(s.name)}</span>
+          <span>need ${s.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(s.uom)}, have ${s.available.toLocaleString('en-PH',{maximumFractionDigits:2})}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  prodRecipeEl.addEventListener('change', updateRunEstimate);
+  prodPaxEl.addEventListener('input', updateRunEstimate);
+
+  function resetProdForm(){
+    document.getElementById('prodEvent').value = '';
+    document.getElementById('prodEventDate').value = '';
+    prodRecipeEl.value = '';
+    prodPaxEl.value = '';
+    document.getElementById('prodBatchDate').value = '';
+    document.getElementById('prodCategory').value = '';
+    document.getElementById('prodStart').value = '';
+    document.getElementById('prodEnd').value = '';
+    document.getElementById('batchNumberHint').textContent = 'Batch #: will be assigned when saved';
+    updateRunEstimate();
+  }
+
+  function enterProdEditMode(plan){
+    editingProdId = plan.id;
+    document.getElementById('prodEvent').value = plan.eventName;
+    document.getElementById('prodEventDate').value = plan.eventDate;
+    prodRecipeEl.value = plan.recipeId;
+    prodPaxEl.value = plan.pax;
+    document.getElementById('prodBatchDate').value = plan.batchDate;
+    document.getElementById('prodCategory').value = plan.category || '';
+    document.getElementById('prodStart').value = plan.startTime;
+    document.getElementById('prodEnd').value = plan.endTime;
+    document.getElementById('batchNumberHint').textContent = 'Batch #: ' + (plan.batchNumber || '—') + ' (permanent, does not change)';
+    updateRunEstimate();
+
+    editingProdBanner.style.display = 'flex';
+    editingProdNameEl.textContent = plan.eventName;
+    saveProdBtn.textContent = 'Update production plan';
+    prodFormMsg.textContent = '';
+    prodFormMsg.className = 'form-msg';
+
+    document.querySelector('.tab-btn[data-tab="production"]').click();
+    document.getElementById('prodEvent').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  function exitProdEditMode(){
+    editingProdId = null;
+    editingProdBanner.style.display = 'none';
+    saveProdBtn.textContent = 'Schedule production';
+  }
+
+  document.getElementById('cancelProdEditBtn').addEventListener('click', ()=>{
+    exitProdEditMode();
+    resetProdForm();
+    prodFormMsg.textContent = 'Edit cancelled.';
+    prodFormMsg.className = 'form-msg';
+  });
+
+  saveProdBtn.addEventListener('click', async ()=>{
+    const eventName = document.getElementById('prodEvent').value.trim();
+    const eventDate = document.getElementById('prodEventDate').value;
+    const recipeId = prodRecipeEl.value;
+    const pax = parseFloat(prodPaxEl.value) || 0;
+    const batchDate = document.getElementById('prodBatchDate').value;
+    const category = document.getElementById('prodCategory').value;
+    const startTime = document.getElementById('prodStart').value;
+    const endTime = document.getElementById('prodEnd').value;
+
+    prodFormMsg.className = 'form-msg';
+    prodFormMsg.textContent = '';
+
+    if(!eventName){
+      prodFormMsg.textContent = 'Add an event name.';
+      prodFormMsg.className = 'form-msg err';
+      return;
+    }
+    if(!recipeId){
+      prodFormMsg.textContent = 'Select which recipe this production is for.';
+      prodFormMsg.className = 'form-msg err';
+      return;
+    }
+    if(pax <= 0){
+      prodFormMsg.textContent = 'Enter the number of pax needed for the event.';
+      prodFormMsg.className = 'form-msg err';
+      return;
+    }
+    if(!batchDate){
+      prodFormMsg.textContent = 'Set the batch production date.';
+      prodFormMsg.className = 'form-msg err';
+      return;
+    }
+    if(!category){
+      prodFormMsg.textContent = 'Select a production category.';
+      prodFormMsg.className = 'form-msg err';
+      return;
+    }
+
+    const recipe = recipes.find(r => r.id === recipeId);
+    const batches = Math.ceil(pax / recipe.yieldVal);
+    const estCost = batches * recipe.totalCost;
+
+    if(editingProdId){
+      const idx = plans.findIndex(p => p.id === editingProdId);
+      if(idx !== -1){
+        const plan = plans[idx];
+        // Release whatever stock this plan had committed BEFORE applying the
+        // edit, so the new requirement is checked against true available stock.
+        if(!plan.validated) releasePlanStock(plan);
+        plans[idx] = {
+          ...plan,
+          eventName, eventDate, recipeId, recipeName: recipe.name,
+          pax, batchDate, category, startTime, endTime,
+          batches, estCost,
+          updatedAt: new Date().toISOString()
+        };
+        if(!plans[idx].validated){
+          const committed = tryCommitPlan(plans[idx]);
+          if(!committed) logHoldShortages(recipe, plans[idx]);
+        }
+      }
+      await persistInventory();
+      await persistPlans();
+      await syncProductionCommitments();
+      renderProductionList();
+      prodFormMsg.textContent = 'Updated production plan for "' + eventName + '".';
+      prodFormMsg.className = 'form-msg ok';
+      exitProdEditMode();
+      resetProdForm();
+    } else {
+      batchCounter += 1;
+      await persistBatchCounter();
+      const createdAt = new Date();
+      const batchNumber = formatBatchNumber(createdAt, batchCounter);
+      const plan = {
+        id: 'p-' + Date.now(),
+        batchNumber,
+        eventName, eventDate, recipeId, recipeName: recipe.name,
+        pax, batchDate, category, startTime, endTime,
+        batches, estCost,
+        stockCommitted: false,
+        committedIngredients: [],
+        savedAt: createdAt.toISOString()
+      };
+      plans.push(plan);
+      // Immediately take the ingredients out of stock if there's enough —
+      // this is what makes a batch "Processing" instead of "Hold".
+      const committed = tryCommitPlan(plan);
+      if(!committed) logHoldShortages(recipe, plan);
+      await persistInventory();
+      await persistPlans();
+      await syncProductionCommitments();
+      renderProductionList();
+      prodFormMsg.textContent = 'Scheduled "' + eventName + '" as batch #' + batchNumber + (committed ? ' — ingredients reserved from stock.' : ' — on Hold, short of stock.');
+      prodFormMsg.className = 'form-msg ok';
+      resetProdForm();
+    }
+  });
+
+  function refreshStationFilter(){
+    const stations = [...new Set(plans.map(p=>p.category).filter(Boolean))].sort();
+    const current = filterStationEl.value;
+    filterStationEl.innerHTML = '<option value="">All categories</option>' +
+      stations.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    if(stations.includes(current)) filterStationEl.value = current;
+  }
+
+  filterStationEl.addEventListener('change', renderProductionList);
+
+  function formatDateDisplay(d){
+    if(!d) return '—';
+    const dt = new Date(d + 'T00:00:00');
+    if(isNaN(dt)) return d;
+    return dt.toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'});
+  }
+
+  function formatTimeDisplay(t){
+    if(!t) return '';
+    const [h,m] = t.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = ((h + 11) % 12) + 1;
+    return h12 + ':' + String(m).padStart(2,'0') + ' ' + period;
+  }
+
+  // ---------- Batches Ready Board (TV view) ----------
+  const tvBoardOverlay = document.getElementById('tvBoardOverlay');
+
+  document.getElementById('openTvBoardBtn').addEventListener('click', ()=>{
+    tvBoardOverlay.style.display = 'flex';
+    renderTvBoard();
+  });
+  document.getElementById('closeTvBoardBtn').addEventListener('click', ()=>{
+    tvBoardOverlay.style.display = 'none';
+  });
+
+  function renderTvBoard(){
+    const grid = document.getElementById('tvBoardGrid');
+    if(!grid) return;
+    const doneSorted = plans.filter(p => p.validated).sort((a,b)=>{
+      return (b.validatedAt || '').localeCompare(a.validatedAt || '');
+    });
+    if(doneSorted.length === 0){
+      grid.innerHTML = '<div class="kanban-empty" style="font-size:16px;color:#9C9F92;">No batches marked done yet.</div>';
+      return;
+    }
+    const groups = {};
+    doneSorted.forEach(p=>{
+      const cat = p.category || 'Uncategorized';
+      if(!groups[cat]) groups[cat] = [];
+      groups[cat].push(p);
+    });
+    grid.innerHTML = Object.keys(groups).sort().map(cat => `
+      <div class="tv-board-group" style="grid-column:1/-1;width:100%;">
+        <p class="section-label" style="color:#9C9F92;margin:0 0 12px;">${escapeHtml(cat).toUpperCase()}</p>
+        <div class="tv-board-grid" style="max-width:none;margin-bottom:24px;">
+          ${groups[cat].map(p => `
+            <div class="tv-tile">
+              <div class="tv-batch-num">#${escapeHtml(p.batchNumber || '—')}</div>
+              <div class="tv-batch-meta">${escapeHtml(p.eventName)}</div>
+              <div class="tv-batch-cat">${escapeHtml(p.category || '')}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderProductionCard(p){
+    const timing = (p.startTime ? formatTimeDisplay(p.startTime) : '—') +
+      (p.endTime ? ' – ' + formatTimeDisplay(p.endTime) : '');
+    const statusTag = p.validated
+      ? '<span class="status-tag" style="background:var(--surface-alt);color:var(--steel);">DONE</span>'
+      : (p.stockCommitted
+        ? '<span class="status-tag go">GO — stock reserved</span>'
+        : '<span class="status-tag nogo">NO-GO</span>');
+
+    let actionsHtml = `<button type="button" data-action="view-prod">View</button>`;
+    if(p.validated){
+      actionsHtml += (canValidate() ? `<button type="button" data-action="reopen-prod">Reopen</button>` : '') +
+        (canDelete() ? `<button type="button" class="del" data-action="delete-prod">Delete</button>` : '');
+    } else {
+      actionsHtml += (canValidate() ? `<button type="button" class="validate" data-action="validate-prod">Validate</button>` : '') +
+        (canEdit() ? `<button type="button" data-action="edit-prod">Edit</button>` : '') +
+        (canDelete() ? `<button type="button" class="del" data-action="delete-prod">Delete</button>` : '');
+    }
+
+    return `
+      <div class="kanban-card" data-id="${p.id}">
+        <span class="batch-tag">Batch #${escapeHtml(p.batchNumber || '—')}</span>
+        ${statusTag}
+        <span class="station-tag">${escapeHtml(p.category || 'Uncategorized')}</span>
+        <div class="rname">${escapeHtml(p.eventName)}</div>
+        <div class="rmeta">
+          ${escapeHtml(p.recipeName)} · ${p.pax} pax needed · ${p.batches} batch${p.batches===1?'':'es'}<br>
+          batch date ${formatDateDisplay(p.batchDate)} · ${timing}
+        </div>
+        <div class="rprice">${PHP(p.estCost)} est. cost</div>
+        <div class="kanban-actions">${actionsHtml}</div>
+      </div>
+    `;
+  }
+
+  function renderProductionList(){
+    refreshStationFilter();
+    const activeStation = filterStationEl.value;
+    const filtered = plans.filter(p => !activeStation || p.category === activeStation);
+    const sorted = [...filtered].sort((a,b)=>{
+      const da = (a.batchDate||'') + (a.startTime||'');
+      const db = (b.batchDate||'') + (b.startTime||'');
+      return da.localeCompare(db);
+    });
+
+    const hold = [];
+    const processing = [];
+    const done = [];
+    sorted.forEach(p=>{
+      if(p.validated){ done.push(p); return; }
+      if(p.stockCommitted) processing.push(p);
+      else hold.push(p);
+    });
+
+    function columnHtml(title, cssClass, items){
+      const cards = items.length === 0
+        ? '<div class="kanban-empty">Nothing here.</div>'
+        : `<div class="kanban-cards">${items.map(renderProductionCard).join('')}</div>`;
+      return `
+        <div class="kanban-col ${cssClass}">
+          <div class="kanban-col-head">
+            <h3>${title}</h3>
+            <span class="kanban-count">${items.length}</span>
+          </div>
+          ${cards}
+        </div>
+      `;
+    }
+
+    // Processing and Done columns are grouped into a dropdown per production
+    // station/category so one station's batches don't get lost in a long mixed list.
+    function groupedColumnHtml(title, cssClass, items, openFirst){
+      if(items.length === 0){
+        return `
+          <div class="kanban-col ${cssClass}">
+            <div class="kanban-col-head"><h3>${title}</h3><span class="kanban-count">0</span></div>
+            <div class="kanban-empty">Nothing here.</div>
+          </div>
+        `;
+      }
+      const groups = {};
+      items.forEach(p=>{
+        const cat = p.category || 'Uncategorized';
+        if(!groups[cat]) groups[cat] = [];
+        groups[cat].push(p);
+      });
+      const catNames = Object.keys(groups).sort();
+      const groupsHtml = catNames.map((cat, idx) => `
+        <details class="station-group" ${(openFirst && idx === 0) ? 'open' : ''}>
+          <summary>${escapeHtml(cat)} <span class="kanban-count">${groups[cat].length}</span></summary>
+          <div class="kanban-cards">${groups[cat].map(renderProductionCard).join('')}</div>
+        </details>
+      `).join('');
+      return `
+        <div class="kanban-col ${cssClass}">
+          <div class="kanban-col-head">
+            <h3>${title}</h3>
+            <span class="kanban-count">${items.length}</span>
+          </div>
+          ${groupsHtml}
+        </div>
+      `;
+    }
+
+    productionBoardEl.innerHTML =
+      columnHtml('HOLD (NO-GO)', 'hold', hold) +
+      groupedColumnHtml('PROCESSING (GO)', 'processing', processing, true) +
+      groupedColumnHtml('DONE (Archived)', 'done', done, false);
+
+    productionBoardEl.querySelectorAll('[data-action="view-prod"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.kanban-card').dataset.id;
+        const plan = plans.find(p => p.id === id);
+        if(plan) viewProductionDetail(plan);
+      });
+    });
+
+    productionBoardEl.querySelectorAll('[data-action="delete-prod"]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const id = e.target.closest('.kanban-card').dataset.id;
+        const plan = plans.find(p => p.id === id);
+        if(editingProdId === id){ exitProdEditMode(); resetProdForm(); }
+        if(plan && !plan.validated && plan.stockCommitted) releasePlanStock(plan);
+        plans = plans.filter(p => p.id !== id);
+        await persistInventory();
+        await persistPlans();
+        await syncProductionCommitments();
+        renderProductionList();
+      });
+    });
+
+    productionBoardEl.querySelectorAll('[data-action="edit-prod"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.kanban-card').dataset.id;
+        const plan = plans.find(p => p.id === id);
+        if(plan) enterProdEditMode(plan);
+      });
+    });
+
+    productionBoardEl.querySelectorAll('[data-action="validate-prod"]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const id = e.target.closest('.kanban-card').dataset.id;
+        const plan = plans.find(p => p.id === id);
+        if(!plan) return;
+        const confirmed = window.confirm('Confirm production batch #' + (plan.batchNumber || '') + ' ("' + plan.eventName + '") is validated and complete? Its reserved ingredients stay consumed and it moves to Done.');
+        if(!confirmed) return;
+
+        // Normally this plan already had its stock committed the moment it
+        // became Processing. If it's somehow still on Hold, force-consume
+        // whatever is left (floors at 0) rather than silently going negative.
+        if(!plan.stockCommitted){
+          const recipe = recipes.find(r => r.id === plan.recipeId);
+          if(recipe) commitPlanStock(plan, recipe, { force: true });
+          await persistInventory();
+        }
+
+        plan.validated = true;
+        plan.validatedAt = new Date().toISOString();
+        await persistPlans();
+        await syncProductionCommitments();
+        renderProductionList();
+        renderInventoryTable();
+      });
+    });
+
+    productionBoardEl.querySelectorAll('[data-action="reopen-prod"]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const id = e.target.closest('.kanban-card').dataset.id;
+        const plan = plans.find(p => p.id === id);
+        if(!plan) return;
+        const confirmed = window.confirm('Move batch #' + (plan.batchNumber || '') + ' ("' + plan.eventName + '") back out of Done? Its reserved stock stays deducted and it returns to Processing.');
+        if(!confirmed) return;
+        plan.validated = false;
+        await persistPlans();
+        renderProductionList();
+      });
+    });
+
+    if(tvBoardOverlay.style.display !== 'none') renderTvBoard();
+    renderInventoryTable();
+  }
+
+  // ---------- Tab: Package Cost Calculator ----------
+  const MARKUP = 3;
+  const pkgFoodRowsEl = document.getElementById('pkgFoodRows');
+  const pkgServiceRowsEl = document.getElementById('pkgServiceRows');
+  const pkgServiceExtraRowsEl = document.getElementById('pkgServiceExtraRows');
+  const pkgMiscRowsEl = document.getElementById('pkgMiscRows');
+  const SERVICE_ROLES = ['Banquet Officer','Wait Staff','Logistics Driver','Florist'];
+
+  function buildServiceRows(){
+    pkgServiceRowsEl.innerHTML = SERVICE_ROLES.map(role => `
+      <div class="svc-role-row" data-role="${escapeHtml(role)}">
+        <div class="svc-role-label">${escapeHtml(role)}</div>
+        <input type="number" class="svc-price" min="0" step="0.01" placeholder="0.00">
+        <input type="number" class="svc-qty" min="0" step="1" placeholder="0">
+        <div class="line-cost">₱0.00</div>
+      </div>
+    `).join('');
+
+    pkgServiceRowsEl.querySelectorAll('input').forEach(el=>{
+      el.addEventListener('input', updatePackageSummary);
+    });
+  }
+
+  function addServiceExtraRow(data){
+    data = data || {};
+    const id = 'svcx-' + (pkgRowIdCounter++);
+    const row = document.createElement('div');
+    row.className = 'pkg-row svc-extra-row';
+    row.dataset.rowId = id;
+    row.innerHTML = `
+      <div>
+        <span class="mini-label">Description</span>
+        <input type="text" class="se-desc" placeholder="e.g. Sound & Lights Technician">
+      </div>
+      <div>
+        <span class="mini-label">Price ₱</span>
+        <input type="number" class="se-price" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div>
+        <span class="mini-label">Qty</span>
+        <input type="number" class="se-qty" min="0" step="1" placeholder="0">
+      </div>
+      <div class="line-cost">₱0.00</div>
+      <button type="button" class="row-remove" title="Remove item">×</button>
+    `;
+    row.querySelector('.se-desc').value = data.description || '';
+    row.querySelector('.se-price').value = data.price ?? '';
+    row.querySelector('.se-qty').value = data.qty ?? '';
+    pkgServiceExtraRowsEl.appendChild(row);
+
+    row.querySelectorAll('input').forEach(el=>{
+      el.addEventListener('input', updatePackageSummary);
+    });
+    row.querySelector('.row-remove').addEventListener('click', ()=>{
+      row.remove();
+      updatePackageSummary();
+    });
+    updatePackageSummary();
+  }
+
+  document.getElementById('addPkgServiceExtraBtn').addEventListener('click', ()=>addServiceExtraRow());
+
+  function getFixedServiceRowsData(){
+    return Array.from(pkgServiceRowsEl.querySelectorAll('.svc-role-row')).map(row=>{
+      const role = row.dataset.role;
+      const price = parseFloat(row.querySelector('.svc-price').value) || 0;
+      const qty = parseFloat(row.querySelector('.svc-qty').value) || 0;
+      const lineTotal = price * qty;
+      row.querySelector('.line-cost').textContent = PHP(lineTotal);
+      return { role, price, qty, lineTotal };
+    });
+  }
+
+  function getServiceExtraRowsData(){
+    return Array.from(pkgServiceExtraRowsEl.querySelectorAll('.pkg-row')).map(row=>{
+      const role = row.querySelector('.se-desc').value.trim();
+      const price = parseFloat(row.querySelector('.se-price').value) || 0;
+      const qty = parseFloat(row.querySelector('.se-qty').value) || 0;
+      const lineTotal = price * qty;
+      row.querySelector('.line-cost').textContent = PHP(lineTotal);
+      return { role, price, qty, lineTotal };
+    });
+  }
+
+  function getServiceRowsData(){
+    const fixed = getFixedServiceRowsData();
+    const extra = getServiceExtraRowsData().filter(r => r.role);
+    return fixed.concat(extra);
+  }
+
+  function setServiceRowsData(items){
+    const byRole = {};
+    const extraItems = [];
+    (items || []).forEach(it => {
+      if(SERVICE_ROLES.includes(it.role)) byRole[it.role] = it;
+      else extraItems.push(it);
+    });
+    pkgServiceRowsEl.querySelectorAll('.svc-role-row').forEach(row=>{
+      const role = row.dataset.role;
+      const it = byRole[role];
+      row.querySelector('.svc-price').value = it ? (it.price || '') : '';
+      row.querySelector('.svc-qty').value = it ? (it.qty || '') : '';
+    });
+    pkgServiceExtraRowsEl.innerHTML = '';
+    extraItems.forEach(it => addServiceExtraRow({description: it.role, price: it.price, qty: it.qty}));
+  }
+  const pkgFormMsg = document.getElementById('pkgFormMsg');
+  const editingPkgBanner = document.getElementById('editingPkgBanner');
+  const editingPkgNameEl = document.getElementById('editingPkgName');
+  const savePkgBtn = document.getElementById('savePkgBtn');
+  const packageListEl = document.getElementById('packageList');
+  const pkgSearchInputEl = document.getElementById('pkgSearchInput');
+  if(pkgSearchInputEl) pkgSearchInputEl.addEventListener('input', renderPackageList);
+  let pkgRowIdCounter = 0;
+
+  function addPkgRow(container, kind, data){
+    data = data || {};
+    const id = 'pkgrow-' + (pkgRowIdCounter++);
+    const row = document.createElement('div');
+    row.className = 'pkg-row';
+    row.dataset.rowId = id;
+
+    row.innerHTML = `
+      <div>
+        <span class="mini-label">Description</span>
+        <input type="text" class="f-desc" placeholder="e.g. Table setup fee">
+      </div>
+      <div>
+        <span class="mini-label">Price ₱</span>
+        <input type="number" class="f-price" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="line-cost">₱0.00</div>
+      <button type="button" class="row-remove" title="Remove item">×</button>
+    `;
+
+    row.querySelector('.f-desc').value = data.description || '';
+    row.querySelector('.f-price').value = data.price ?? '';
+    container.appendChild(row);
+
+    row.querySelectorAll('input').forEach(el=>{
+      el.addEventListener('input', updatePackageSummary);
+    });
+    row.querySelector('.row-remove').addEventListener('click', ()=>{
+      row.remove();
+      updatePackageSummary();
+    });
+    updatePackageSummary();
+  }
+
+  function addFoodRow(data){
+    data = data || {};
+    const id = 'pkgrow-' + (pkgRowIdCounter++);
+    const row = document.createElement('div');
+    row.className = 'pkg-row';
+    row.dataset.rowId = id;
+    row.innerHTML = `
+      <div>
+        <span class="mini-label">Recipe</span>
+        <select class="f-recipe">
+          <option value="">Select a saved recipe…</option>
+          ${recipes.map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.category)})</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <span class="mini-label">Price /pax</span>
+        <div class="f-price-display">₱0.00</div>
+      </div>
+      <div class="line-cost">₱0.00</div>
+      <button type="button" class="row-remove" title="Remove item">×</button>
+    `;
+    pkgFoodRowsEl.appendChild(row);
+
+    if(data.recipeId && recipes.some(r => r.id === data.recipeId)){
+      row.querySelector('.f-recipe').value = data.recipeId;
+    }
+    updateFoodRowDisplay(row);
+
+    row.querySelector('.f-recipe').addEventListener('change', ()=>{
+      updateFoodRowDisplay(row);
+      updatePackageSummary();
+    });
+    row.querySelector('.row-remove').addEventListener('click', ()=>{
+      row.remove();
+      updatePackageSummary();
+    });
+    updatePackageSummary();
+  }
+
+  function updateFoodRowDisplay(row){
+    const recipeId = row.querySelector('.f-recipe').value;
+    const recipe = recipes.find(r => r.id === recipeId);
+    const price = recipe ? recipe.costPerPax : 0;
+    row.querySelector('.f-price-display').textContent = PHP(price);
+  }
+
+  function refreshFoodRecipeOptions(){
+    pkgFoodRowsEl.querySelectorAll('.pkg-row').forEach(row=>{
+      const select = row.querySelector('.f-recipe');
+      const current = select.value;
+      select.innerHTML = '<option value="">Select a saved recipe…</option>' +
+        recipes.map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.category)})</option>`).join('');
+      if(recipes.some(r => r.id === current)) select.value = current;
+      updateFoodRowDisplay(row);
+    });
+  }
+
+  function getFoodRowsData(){
+    return Array.from(pkgFoodRowsEl.querySelectorAll('.pkg-row')).map(row=>{
+      const recipeId = row.querySelector('.f-recipe').value;
+      const recipe = recipes.find(r => r.id === recipeId);
+      const description = recipe ? recipe.name : '';
+      const price = recipe ? recipe.costPerPax : 0;
+      const charged = price * MARKUP;
+      row.querySelector('.line-cost').textContent = PHP(charged);
+      updateFoodRowDisplay(row);
+      return { description, price, charged, recipeId };
+    });
+  }
+
+  document.getElementById('addPkgFoodBtn').addEventListener('click', ()=>addFoodRow());
+  document.getElementById('addPkgMiscBtn').addEventListener('click', ()=>addPkgRow(pkgMiscRowsEl,'misc'));
+
+  function getPkgRowsData(container, applyMarkup){
+    return Array.from(container.querySelectorAll('.pkg-row')).map(row=>{
+      const description = row.querySelector('.f-desc').value.trim();
+      const price = parseFloat(row.querySelector('.f-price').value) || 0;
+      const charged = applyMarkup ? price * MARKUP : price;
+      row.querySelector('.line-cost').textContent = PHP(charged);
+      return { description, price, charged };
+    });
+  }
+
+  function updatePackageSummary(){
+    const foodRows = getFoodRowsData();
+    const serviceRows = getServiceRowsData();
+    const miscRows = getPkgRowsData(pkgMiscRowsEl, false);
+
+    const foodOnlyPriceSum = foodRows.reduce((s,r)=>s+r.price,0);
+    const foodOnlyCharged = foodRows.reduce((s,r)=>s+r.charged,0);
+    const serviceTotal = serviceRows.reduce((s,r)=>s+r.lineTotal,0);
+    const miscTotal = miscRows.reduce((s,r)=>s+r.charged,0);
+
+    const pax = parseFloat(document.getElementById('pkgPax').value) || 0;
+    const paxMultiplier = pax > 0 ? pax : 1;
+
+    const foodChargedTotal = foodOnlyCharged * paxMultiplier;
+    const rawFoodTotal = foodOnlyPriceSum * paxMultiplier;
+    const grandTotal = foodChargedTotal + serviceTotal + miscTotal;
+    const perPax = pax > 0 ? (foodOnlyCharged + (serviceTotal + miscTotal) / pax) : (foodOnlyCharged + serviceTotal + miscTotal);
+
+    document.getElementById('pkgFoodSubtotal').textContent = PHP(foodOnlyPriceSum);
+    document.getElementById('pkgFoodCharged').textContent = PHP(foodOnlyCharged);
+    document.getElementById('pkgFoodChargedTotal').textContent = PHP(foodChargedTotal);
+    document.getElementById('pkgServiceTotal').textContent = PHP(serviceTotal);
+    document.getElementById('pkgMiscTotal').textContent = PHP(miscTotal);
+    document.getElementById('pkgPaxDisplay').textContent = pax > 0 ? (pax + ' pax') : '— pax';
+    document.getElementById('pkgGrandTotal').innerHTML = PHP(grandTotal);
+    document.getElementById('pkgPerPax').innerHTML = PHP(perPax);
+
+    renderPkgPieChart(rawFoodTotal, serviceTotal, miscTotal);
+    renderPriceStructureChart(foodOnlyPriceSum, grandTotal);
+  }
+
+  function renderPkgPieChart(foodTotal, serviceTotal, miscTotal){
+    const circle = document.getElementById('pkgPieChart');
+    const legend = document.getElementById('pkgPieLegend');
+    const total = foodTotal + serviceTotal + miscTotal;
+
+    const slices = [
+      { label:'Food item cost total (no ×3)', value: foodTotal, color:'var(--rust)' },
+      { label:'Service cost total', value: serviceTotal, color:'var(--herb)' },
+      { label:'Miscellaneous cost total', value: miscTotal, color:'var(--gold)' }
+    ];
+
+    if(total <= 0){
+      circle.style.background = '#33362F';
+      legend.innerHTML = slices.map(s => `
+        <div class="legend-item">
+          <span class="legend-label"><span class="legend-swatch" style="background:${s.color};"></span>${s.label}</span>
+          <span class="legend-value">₱0.00</span>
+        </div>
+      `).join('');
+      return;
+    }
+
+    let cumulative = 0;
+    const stops = slices.map(s => {
+      const start = cumulative;
+      const pct = (s.value / total) * 100;
+      cumulative += pct;
+      return `${s.color} ${start}% ${cumulative}%`;
+    }).join(', ');
+    circle.style.background = `conic-gradient(${stops})`;
+
+    legend.innerHTML = slices.map(s => `
+      <div class="legend-item">
+        <span class="legend-label"><span class="legend-swatch" style="background:${s.color};"></span>${s.label}</span>
+        <span class="legend-value">${PHP(s.value)} (${((s.value/total)*100).toFixed(0)}%)</span>
+      </div>
+    `).join('');
+  }
+
+  function renderPriceStructureChart(foodCostPerPax, grandTotal){
+    const circle = document.getElementById('pkgStructureChart');
+    const legend = document.getElementById('pkgStructureLegend');
+    const vatRate = parseFloat(document.getElementById('pkgVatRate').value) || 0;
+    const packageCostInput = document.getElementById('pkgPackageCostInput');
+    const packageCost = parseFloat(packageCostInput.value) || 0;
+
+    if(packageCost <= 0){
+      circle.style.background = '#33362F';
+      legend.innerHTML = `<div class="legend-item"><span class="legend-label">Select a standard package above to see the breakdown.</span></div>`;
+      return;
+    }
+
+    const cogsPct = (foodCostPerPax / packageCost) * 100;
+    const vatPct = vatRate;
+    const marginPct = 100 - cogsPct - vatPct;
+
+    const cogsAmount = foodCostPerPax;
+    const vatAmount = packageCost * (vatPct / 100);
+    const marginAmount = packageCost - cogsAmount - vatAmount;
+
+    const slices = [
+      { label:'Cost of Goods', pct: cogsPct, amount: cogsAmount, color:'var(--rust)' },
+      { label:'VAT', pct: vatPct, amount: vatAmount, color:'#5B7C99' },
+      { label:'Margin', pct: marginPct, amount: marginAmount, color:'var(--herb)' }
+    ];
+
+    const clamped = slices.map(s => Math.max(0, s.pct));
+    const clampedTotal = clamped.reduce((a,b)=>a+b, 0) || 1;
+    let cumulative = 0;
+    const stops = slices.map((s,i) => {
+      const start = cumulative;
+      const width = (clamped[i] / clampedTotal) * 100;
+      cumulative += width;
+      return `${s.color} ${start}% ${cumulative}%`;
+    }).join(', ');
+    circle.style.background = `conic-gradient(${stops})`;
+
+    legend.innerHTML = slices.map(s => `
+      <div class="legend-item">
+        <span class="legend-label"><span class="legend-swatch" style="background:${s.color};"></span>${s.label}</span>
+        <span class="legend-value">${PHP(s.amount)} (${s.pct.toFixed(1)}%)</span>
+      </div>
+    `).join('') + (marginPct < 0 ? '<div class="legend-warning">⚠ Cost of Goods + VAT exceed the total package price</div>' : '');
+  }
+
+  document.getElementById('pkgVatRate').addEventListener('input', updatePackageSummary);
+  document.getElementById('pkgPackageCostInput').addEventListener('input', updatePackageSummary);
+  document.getElementById('pkgPax').addEventListener('input', updatePackageSummary);
+
+  function resetPkgForm(){
+    document.getElementById('pkgSoNumber').value = '';
+    document.getElementById('pkgName').value = '';
+    document.getElementById('pkgPax').value = '';
+    pkgFoodRowsEl.innerHTML = '';
+    pkgMiscRowsEl.innerHTML = '';
+    addFoodRow();
+    addPkgRow(pkgMiscRowsEl,'misc');
+    setServiceRowsData([]);
+    updatePackageSummary();
+  }
+
+  function enterPkgEditMode(pkg){
+    editingPkgId = pkg.id;
+    document.getElementById('pkgSoNumber').value = pkg.soNumber || '';
+    document.getElementById('pkgName').value = pkg.name;
+    document.getElementById('pkgPax').value = pkg.pax || '';
+    pkgFoodRowsEl.innerHTML = '';
+    pkgMiscRowsEl.innerHTML = '';
+    pkg.foodItems.forEach(it => {
+      let recipeId = it.recipeId;
+      if(!recipeId){
+        const matched = recipes.find(r => r.name === it.description);
+        recipeId = matched ? matched.id : '';
+      }
+      addFoodRow({recipeId});
+    });
+    pkg.miscItems.forEach(it => addPkgRow(pkgMiscRowsEl,'misc',{description:it.description, price:it.price}));
+    if(pkgFoodRowsEl.children.length === 0) addFoodRow();
+    if(pkgMiscRowsEl.children.length === 0) addPkgRow(pkgMiscRowsEl,'misc');
+    setServiceRowsData(pkg.serviceItems || []);
+    updatePackageSummary();
+
+    editingPkgBanner.style.display = 'flex';
+    editingPkgNameEl.textContent = pkg.name;
+    savePkgBtn.textContent = 'Update package';
+    pkgFormMsg.textContent = '';
+    pkgFormMsg.className = 'form-msg';
+
+    document.querySelector('.tab-btn[data-tab="packages"]').click();
+    document.getElementById('pkgName').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  function exitPkgEditMode(){
+    editingPkgId = null;
+    editingPkgBanner.style.display = 'none';
+    savePkgBtn.textContent = 'Save package';
+  }
+
+  document.getElementById('cancelPkgEditBtn').addEventListener('click', ()=>{
+    exitPkgEditMode();
+    resetPkgForm();
+    pkgFormMsg.textContent = 'Edit cancelled.';
+    pkgFormMsg.className = 'form-msg';
+  });
+
+  savePkgBtn.addEventListener('click', async ()=>{
+    const soNumber = document.getElementById('pkgSoNumber').value.trim();
+    const name = document.getElementById('pkgName').value.trim();
+    const pax = parseFloat(document.getElementById('pkgPax').value) || 0;
+    const foodItems = getFoodRowsData().filter(r=>r.description);
+    const serviceItems = getServiceRowsData();
+    const miscItems = getPkgRowsData(pkgMiscRowsEl, false).filter(r=>r.description);
+
+    pkgFormMsg.className = 'form-msg';
+    pkgFormMsg.textContent = '';
+
+    if(!name){
+      pkgFormMsg.textContent = 'Add a name for this package.';
+      pkgFormMsg.className = 'form-msg err';
+      return;
+    }
+    const hasService = serviceItems.some(s => s.price > 0 && s.qty > 0);
+    if(foodItems.length === 0 && !hasService && miscItems.length === 0){
+      pkgFormMsg.textContent = 'Add at least one food, service, or miscellaneous item.';
+      pkgFormMsg.className = 'form-msg err';
+      return;
+    }
+
+    const foodSubtotal = foodItems.reduce((s,r)=>s+r.price,0);
+    const foodCharged = foodItems.reduce((s,r)=>s+r.charged,0);
+    const serviceTotal = serviceItems.reduce((s,r)=>s+r.lineTotal,0);
+    const miscTotal = miscItems.reduce((s,r)=>s+r.charged,0);
+    const paxMultiplier = pax > 0 ? pax : 1;
+    const foodChargedTotal = foodCharged * paxMultiplier;
+    const rawFoodTotal = foodSubtotal * paxMultiplier;
+    const grandTotal = foodChargedTotal + serviceTotal + miscTotal;
+    const pricePerPax = pax > 0 ? (foodCharged + (serviceTotal + miscTotal) / pax) : (foodCharged + serviceTotal + miscTotal);
+
+    if(editingPkgId){
+      const idx = packages.findIndex(p => p.id === editingPkgId);
+      if(idx !== -1){
+        packages[idx] = {
+          ...packages[idx],
+          soNumber, name, pax, foodItems, serviceItems, miscItems,
+          foodSubtotal, foodCharged, foodChargedTotal, serviceTotal, rawFoodTotal, miscTotal, grandTotal, pricePerPax,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      await persistPackages();
+      renderPackageList();
+      pkgFormMsg.textContent = 'Updated "' + name + '".';
+      pkgFormMsg.className = 'form-msg ok';
+      exitPkgEditMode();
+      resetPkgForm();
+    } else {
+      const pkg = {
+        id: 'pkg-' + Date.now(),
+        soNumber, name, pax, foodItems, serviceItems, miscItems,
+        foodSubtotal, foodCharged, foodChargedTotal, serviceTotal, rawFoodTotal, miscTotal, grandTotal, pricePerPax,
+        savedAt: new Date().toISOString()
+      };
+      packages.unshift(pkg);
+      await persistPackages();
+      renderPackageList();
+      pkgFormMsg.textContent = 'Saved "' + name + '" package.';
+      pkgFormMsg.className = 'form-msg ok';
+      resetPkgForm();
+    }
+  });
+
+  function renderPackageList(){
+    if(packages.length === 0){
+      packageListEl.innerHTML = '<div class="empty-state">No packages saved yet. Build one above — food items get the ×3 markup (× pax), service roles are price × qty, and miscellaneous is added flat.</div>';
+      return;
+    }
+    const searchEl = document.getElementById('pkgSearchInput');
+    const query = (searchEl && searchEl.value || '').trim().toLowerCase();
+    const visible = query
+      ? packages.filter(p => (p.soNumber||'').toLowerCase().includes(query) || p.name.toLowerCase().includes(query))
+      : packages;
+
+    if(visible.length === 0){
+      packageListEl.innerHTML = `<div class="empty-state">No saved packages match "${escapeHtml(searchEl.value)}".</div>`;
+      return;
+    }
+
+    packageListEl.innerHTML = visible.map(pkg => {
+      const serviceCount = (pkg.serviceItems || []).filter(s=>s.qty > 0).length;
+      const serviceTotal = pkg.serviceTotal || 0;
+      return `
+      <div class="recipe-item" data-id="${pkg.id}">
+        <div>
+          ${pkg.soNumber ? `<span class="so-tag">SO# ${escapeHtml(pkg.soNumber)}</span>` : ''}
+          <span class="cat-tag">${pkg.foodItems.length} food · ${serviceCount} service role${serviceCount===1?'':'s'} · ${pkg.miscItems.length} misc</span>
+          ${pkg.pax ? `<span class="cat-tag">${pkg.pax} pax</span>` : ''}
+          <div class="rname">${escapeHtml(pkg.name)}</div>
+          <div class="rmeta">food ×3/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(serviceTotal)} · misc (flat): ${PHP(pkg.miscTotal)}${pkg.pax ? ' · ' + PHP(pkg.pricePerPax) + ' / pax' : ''}</div>
+          <div class="pax-adjust">
+            <label>Adjust pax</label>
+            <input type="number" class="pax-adjust-input" min="1" step="1" value="${pkg.pax || ''}" ${pkg.pax ? '' : 'placeholder="pax"'}>
+            <span class="pax-adjust-result">${pkg.pax ? '= ' + PHP(pkg.grandTotal) : 'set pax on this package to enable'}</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="rprice">${PHP(pkg.grandTotal)} <span style="color:var(--steel);font-weight:400;font-size:11px;">total</span></div>
+          ${itemActionsHtml('edit-pkg','delete-pkg','view-pkg')}
+        </div>
+      </div>
+    `;
+    }).join('');
+
+    packageListEl.querySelectorAll('[data-action="view-pkg"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.recipe-item').dataset.id;
+        const pkg = packages.find(p => p.id === id);
+        if(pkg) viewPackageDetail(pkg);
+      });
+    });
+
+    packageListEl.querySelectorAll('.pax-adjust-input').forEach(input=>{
+      input.addEventListener('input', (e)=>{
+        const card = e.target.closest('.recipe-item');
+        const id = card.dataset.id;
+        const pkg = packages.find(p => p.id === id);
+        const resultEl = card.querySelector('.pax-adjust-result');
+        const newPax = parseFloat(e.target.value) || 0;
+        if(!pkg.pax || pkg.pax <= 0){
+          resultEl.textContent = 'set pax on this package to enable';
+          return;
+        }
+        if(newPax <= 0){
+          resultEl.textContent = 'enter a pax count';
+          return;
+        }
+        const serviceTotal = pkg.serviceTotal || 0;
+        const adjustedTotal = (pkg.foodCharged * newPax) + serviceTotal + pkg.miscTotal;
+        resultEl.textContent = '= ' + PHP(adjustedTotal) + ' for ' + newPax + ' pax';
+      });
+    });
+
+    packageListEl.querySelectorAll('[data-action="delete-pkg"]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const id = e.target.closest('.recipe-item').dataset.id;
+        if(editingPkgId === id){ exitPkgEditMode(); resetPkgForm(); }
+        packages = packages.filter(p => p.id !== id);
+        await persistPackages();
+        renderPackageList();
+      });
+    });
+
+    packageListEl.querySelectorAll('[data-action="edit-pkg"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.recipe-item').dataset.id;
+        const pkg = packages.find(p => p.id === id);
+        if(pkg) enterPkgEditMode(pkg);
+      });
+    });
+  }
+
+  // ---------- Access control on static controls ----------
+  function gateEl(el, allowed, reason){
+    if(!el) return;
+    if(!allowed){
+      el.disabled = true;
+      el.title = reason || 'Your access level does not allow this action.';
+      el.style.opacity = '0.5';
+      el.style.cursor = 'not-allowed';
+    }
+  }
+
+  function applyStaticAccessControl(){
+    const roleBadge = document.getElementById('currentRoleBadge');
+    if(roleBadge) roleBadge.textContent = ROLE_LABELS[currentRole] || currentRole;
+
+    const masterArchiveBtn = document.getElementById('masterArchiveOpenBtn');
+    const manageAccessBtn = document.getElementById('manageAccessOpenBtn');
+    if(masterArchiveBtn) masterArchiveBtn.style.display = canManageAccess() ? 'inline-block' : 'none';
+    if(manageAccessBtn) manageAccessBtn.style.display = canManageAccess() ? 'inline-block' : 'none';
+
+    const creationDisabledMsg = 'Viewers cannot create or edit entries.';
+    [
+      'saveRecipeBtn','addIngredientBtn',
+      'saveProdBtn',
+      'savePkgBtn','addPkgFoodBtn','addPkgServiceExtraBtn','addPkgMiscBtn'
+    ].forEach(id => gateEl(document.getElementById(id), canCreate(), creationDisabledMsg));
+
+    // Recipe name/category/yield + ingredient rows, production form, package form inputs
+    if(!canCreate()){
+      document.querySelectorAll('#panel-builder input, #panel-builder select, #panel-production input, #panel-production select, #panel-packages input, #panel-packages select').forEach(el=>{
+        if(el.id === 'invSearchInput' || el.id === 'recipeSearchInput' || el.id === 'pkgSearchInput' || el.id === 'filterCategory' || el.id === 'filterStation') return;
+        el.disabled = true;
+      });
+    }
+  }
+
+  // ---------- Master Archive (admin only) ----------
+  const MASTER_ARCHIVE_KEY = 'kitchen-master-archives';
+  let masterArchives = [];
+
+  async function loadMasterArchives(){
+    try{
+      const res = await window.storage.get(MASTER_ARCHIVE_KEY, false);
+      masterArchives = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      masterArchives = [];
+    }
+  }
+  async function persistMasterArchives(){
+    try{ await window.storage.set(MASTER_ARCHIVE_KEY, JSON.stringify(masterArchives), false); }
+    catch(e){ console.error('Storage error', e); }
+  }
+
+  function buildArchiveWorkbook(snapshot){
+    const wb = XLSX.utils.book_new();
+    const d = snapshot.data;
+
+    const recipeRows = (d.recipes||[]).flatMap(r => (r.ingredients||[]).map(ing => ({
+      'Recipe': r.name, 'Category': r.category, 'Yield (pax)': r.yieldVal,
+      'Cost/Pax': r.costPerPax, 'Recipe Total': r.totalCost,
+      'Ingredient': ing.name, 'Qty': ing.qty, 'UOM': ing.uom,
+      'Unit Price': ing.unitPrice, 'Line Cost': ing.lineCost
+    })));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(recipeRows.length ? recipeRows : [{Note:'No recipes saved'}]), 'Recipe Cards');
+
+    const planRows = (d.plans||[]).map(p => ({
+      'Batch #': p.batchNumber, 'Event': p.eventName, 'Recipe': p.recipeName,
+      'Category': p.category, 'Pax': p.pax, 'Batches': p.batches,
+      'Batch Date': p.batchDate, 'Start': p.startTime, 'End': p.endTime,
+      'Est. Cost': p.estCost, 'Status': p.validated ? 'Done' : (p.stockCommitted ? 'Processing' : 'Hold')
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(planRows.length ? planRows : [{Note:'No production plans saved'}]), 'Production Plans');
+
+    const pkgRows = (d.packages||[]).map(p => ({
+      'Package': p.name, 'SO#': p.soNumber||'', 'Pax': p.pax||'',
+      'Food Charged': p.foodCharged, 'Service Total': p.serviceTotal||0,
+      'Misc Total': p.miscTotal, 'Grand Total': p.grandTotal
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pkgRows.length ? pkgRows : [{Note:'No packages saved'}]), 'Packages');
+
+    const invRows = (d.inventory||[]).map(i => ({
+      'Ingredient': i.name, 'UOM': i.uom, 'Stock on hand': i.stock||0
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invRows.length ? invRows : [{Note:'No inventory tracked'}]), 'Inventory');
+
+    const histRows = (d.inventoryHistory||[]).map(h => ({
+      'Date': h.date, 'User': h.user, 'Item': h.item, 'UOM': h.uom,
+      'Old Qty': h.oldQty!=null?h.oldQty:'', 'New Qty': h.newQty!=null?h.newQty:'',
+      'Reason': h.reason||h.note||'', 'Out of Stock': h.outOfStock ? 'YES' : ''
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(histRows.length ? histRows : [{Note:'No stock history recorded'}]), 'Stock History');
+
+    return wb;
+  }
+
+  function exportArchiveToExcel(snapshot){
+    const wb = buildArchiveWorkbook(snapshot);
+    const safeLabel = (snapshot.label || 'archive').replace(/[^a-z0-9\- _]/gi,'').trim() || 'archive';
+    XLSX.writeFile(wb, 'Kitchen-Cost-Rail_' + safeLabel + '.xlsx');
+  }
+
+  function renderMasterArchiveList(){
+    const list = document.getElementById('archiveList');
+    if(!list) return;
+    if(masterArchives.length === 0){
+      list.innerHTML = '<div class="empty-state" style="padding:12px;">No archives saved yet.</div>';
+      return;
+    }
+    list.innerHTML = masterArchives.map(a => `
+      <div class="archive-row" data-id="${a.id}">
+        <div>
+          <span class="arch-label">${escapeHtml(a.label)}</span>
+          <span class="arch-meta">${escapeHtml(new Date(a.createdAt).toLocaleString('en-PH',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}))} · by ${escapeHtml(a.createdBy||'—')}</span>
+        </div>
+        <button type="button" data-action="download-archive">⬇ Download .xlsx</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-action="download-archive"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.archive-row').dataset.id;
+        const snap = masterArchives.find(a => a.id === id);
+        if(snap) exportArchiveToExcel(snap);
+      });
+    });
+  }
+
+  async function createMasterArchive(){
+    const defaultLabel = new Date().toLocaleString('en-US',{month:'long', year:'numeric'});
+    const label = window.prompt('Label this archive (e.g. month being closed out):', defaultLabel) || defaultLabel;
+    const snapshot = {
+      id: 'arch-' + Date.now(),
+      label: label,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser || 'Unnamed user',
+      data: {
+        recipes: recipes,
+        plans: plans,
+        packages: packages,
+        inventory: inventory,
+        inventoryHistory: inventoryHistory
+      }
+    };
+    masterArchives.unshift(snapshot);
+    await persistMasterArchives();
+    exportArchiveToExcel(snapshot);
+    renderMasterArchiveList();
+  }
+
+  const masterArchiveOverlayEl = document.getElementById('masterArchiveOverlay');
+  document.getElementById('masterArchiveOpenBtn').addEventListener('click', async ()=>{
+    if(!canManageAccess()) return;
+    await loadMasterArchives();
+    renderMasterArchiveList();
+    masterArchiveOverlayEl.style.display = 'flex';
+  });
+  document.getElementById('closeMasterArchiveBtn').addEventListener('click', ()=>{
+    masterArchiveOverlayEl.style.display = 'none';
+  });
+  document.getElementById('createArchiveBtn').addEventListener('click', async ()=>{
+    if(!canManageAccess()) return;
+    await createMasterArchive();
+  });
+
+  // ---------- Manage Access (admin only) ----------
+  function renderAccessAccountsList(){
+    const wrap = document.getElementById('accessAccountsList');
+    if(!wrap) return;
+    wrap.innerHTML = `
+      <div class="access-account-row">
+        <div><span class="acct-name">Admin</span><span class="acct-meta">username: admin · Level 1 — full access</span></div>
+        <span class="acct-meta">Always enabled</span>
+      </div>
+      ${['chef1','chef2'].map((u,idx) => `
+        <div class="access-account-row">
+          <div><span class="acct-name">${FIXED_ACCOUNTS[u].label}</span><span class="acct-meta">username: ${u} · Level 2 — Manager</span></div>
+          <label class="toggle-switch">
+            <input type="checkbox" data-account="${u}" ${managerAccountEnabled[u] !== false ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      `).join('')}
+    `;
+    wrap.querySelectorAll('input[data-account]').forEach(input=>{
+      input.addEventListener('change', async (e)=>{
+        const u = e.target.dataset.account;
+        managerAccountEnabled[u] = e.target.checked;
+        await persistAccessAccounts();
+      });
+    });
+  }
+
+  const manageAccessOverlayEl = document.getElementById('manageAccessOverlay');
+  document.getElementById('manageAccessOpenBtn').addEventListener('click', async ()=>{
+    if(!canManageAccess()) return;
+    await loadAccessAccounts();
+    renderAccessAccountsList();
+    manageAccessOverlayEl.style.display = 'flex';
+  });
+  document.getElementById('closeManageAccessBtn').addEventListener('click', ()=>{
+    manageAccessOverlayEl.style.display = 'none';
+  });
+
+  // ---------- Init ----------
+  document.getElementById('printBtn').addEventListener('click', ()=>window.print());
+  addIngredientRow();
+  buildServiceRows();
+  addFoodRow();
+  addPkgRow(pkgMiscRowsEl,'misc');
+  loadBatchCounter();
+  loadPackages();
+  loadInventoryHistory();
+  renderCcpBoard();
+  applyStaticAccessControl();
+  (async function initRecipesAndInventory(){
+    await loadRecipes();
+    await loadPlans();
+    await loadInventory();
+    await syncProductionCommitments();
+    renderProductionList();
+    applyStaticAccessControl();
+  })();
+}
+
+// =====================================================================
+// ONLINE / TEAM ACCESS SETUP (Google Sheets + Apps Script)
+// Paste the Web App URL you get after deploying the Apps Script below.
+// Access is restricted to your company's Google Workspace domain via the
+// Apps Script deployment setting ("Anyone within [yourcompany.com]") —
+// your team's existing Google sign-in handles the login, no password
+// screen needed here.
+// =====================================================================
+const GAS_WEB_APP_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL';
+
+async function gasCall(action, payload){
+  const res = await fetch(GAS_WEB_APP_URL, {
+    method: 'POST',
+    // text/plain avoids a CORS preflight that Apps Script doesn't handle well
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(Object.assign({ action: action }, payload || {}))
+  });
+  const text = await res.text();
+  try{
+    return JSON.parse(text);
+  }catch(e){
+    // Got HTML back instead of JSON — usually means the browser isn't
+    // signed into an allowed Google account for this Apps Script.
+    throw new Error('NOT_SIGNED_IN');
+  }
+}
+
+if(GAS_WEB_APP_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL'){
+  window.storage = {
+    async get(key){
+      return await gasCall('get', { key: key });
+    },
+    async set(key, value){
+      return await gasCall('set', { key: key, value: value });
+    },
+    async delete(key){
+      return await gasCall('delete', { key: key });
+    },
+    async list(prefix){
+      return await gasCall('list', { prefix: prefix });
+    }
+  };
+}
+
+// ---------- Access levels (3 fixed accounts) ----------
+// Admin   (username "admin", password "admin1"):  full access, incl. Master Archive & Manage Access
+// Manager (username "chef1"/"chef2", password matches username): create, edit, validate — no delete, no access management
+// Viewer  (anyone without a matching login):        view only, incl. the new "View" buttons — no create, edit, delete, validate, or stock changes
+let currentRole = 'viewer';
+let currentUser = '';
+let currentAccountId = null; // 'admin' | 'chef1' | 'chef2' | null (viewer)
+
+const FIXED_ACCOUNTS = {
+  admin: { password: 'admin1', role: 'admin', label: 'Admin' },
+  chef1: { password: 'chef1',  role: 'manager', label: 'Head Chef 1' },
+  chef2: { password: 'chef2',  role: 'manager', label: 'Head Chef 2' }
+};
+// Admin can disable a manager account from the "Manage Access" panel — a
+// disabled account falls back to Viewer even with the right password.
+let managerAccountEnabled = { chef1: true, chef2: true };
+const ACCESS_ACCOUNTS_KEY = 'kitchen-access-accounts';
+
+async function loadAccessAccounts(){
+  try{
+    const res = await window.storage.get(ACCESS_ACCOUNTS_KEY, false);
+    if(res && res.value) managerAccountEnabled = Object.assign({chef1:true, chef2:true}, JSON.parse(res.value));
+  }catch(e){ /* keep defaults */ }
+}
+async function persistAccessAccounts(){
+  try{ await window.storage.set(ACCESS_ACCOUNTS_KEY, JSON.stringify(managerAccountEnabled), false); }
+  catch(e){ console.error('Storage error', e); }
+}
+
+const ROLE_LABELS = { admin:'Level 1 — Admin', manager:'Level 2 — Manager', viewer:'Level 3 — Viewer' };
+function canCreate(){ return currentRole !== 'viewer'; }
+function canEdit(){ return currentRole !== 'viewer'; }
+function canDelete(){ return currentRole === 'admin'; }
+function canValidate(){ return currentRole === 'admin' || currentRole === 'manager'; }
+function canManageAccess(){ return currentRole === 'admin'; }
+
+function updateRoleDesc(){
+  const u = (document.getElementById('loginUsername').value || '').trim().toLowerCase();
+  const p = document.getElementById('loginPassword').value || '';
+  const acct = FIXED_ACCOUNTS[u];
+  if(!u && !p){
+    roleDescEl.textContent = 'No login? You\'ll enter as Level 3 — Viewer (read-only).';
+  } else if(acct && acct.password === p){
+    if(acct.role === 'manager' && managerAccountEnabled[u] === false){
+      roleDescEl.textContent = 'This manager account has been disabled by the Admin — you\'ll enter as Viewer.';
+    } else {
+      roleDescEl.textContent = acct.role === 'admin'
+        ? 'Level 1 — Admin: full access, incl. Master Archive & Manage Access.'
+        : 'Level 2 — Manager (' + acct.label + '): create, edit, and validate. No delete, no access management.';
+    }
+  } else {
+    roleDescEl.textContent = 'Username/password not recognized — you\'ll enter as Level 3 — Viewer.';
+  }
+}
+const roleDescEl = document.getElementById('roleDesc');
+document.getElementById('loginUsername').addEventListener('input', updateRoleDesc);
+document.getElementById('loginPassword').addEventListener('input', updateRoleDesc);
+
+const accessModalOverlay = document.getElementById('accessModalOverlay');
+document.getElementById('showAccessTableBtn').addEventListener('click', ()=>{
+  accessModalOverlay.style.display = 'flex';
+});
+document.getElementById('closeAccessTableBtn').addEventListener('click', ()=>{
+  accessModalOverlay.style.display = 'none';
+});
+
+// ---------- Access gate ----------
+const loginScreen = document.getElementById('loginScreen');
+const appWrap = document.getElementById('appWrap');
+const loginMsg = document.getElementById('loginMsg');
+const gateMessage = document.getElementById('gateMessage');
+const retryAccessBtn = document.getElementById('retryAccessBtn');
+const enterAppBtn = document.getElementById('enterAppBtn');
+
+function resolveLogin(){
+  const u = (document.getElementById('loginUsername').value || '').trim().toLowerCase();
+  const p = document.getElementById('loginPassword').value || '';
+  const acct = FIXED_ACCOUNTS[u];
+  if(acct && acct.password === p && !(acct.role === 'manager' && managerAccountEnabled[u] === false)){
+    return { role: acct.role, label: acct.label, accountId: u };
+  }
+  return { role: 'viewer', label: 'Viewer', accountId: null };
+}
+
+async function showApp(){
+  await loadAccessAccounts();
+  const login = resolveLogin();
+  currentRole = login.role;
+  currentAccountId = login.accountId;
+  const typedName = document.getElementById('currentUserInput').value.trim();
+  currentUser = typedName || login.label;
+  loginScreen.style.display = 'none';
+  appWrap.style.display = 'block';
+  initApp();
+}
+
+function showAccessError(message){
+  gateMessage.textContent = 'Access check failed.';
+  loginMsg.textContent = message || '';
+  retryAccessBtn.style.display = 'inline-block';
+}
+
+async function checkAccess(){
+  if(GAS_WEB_APP_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL'){
+    // Not configured yet — data saves to this device only, no online setup active.
+    gateMessage.textContent = 'Log in as Admin/Chef 1/Chef 2, or leave blank to view only.';
+    retryAccessBtn.style.display = 'none';
+    return;
+  }
+  gateMessage.textContent = 'Checking your company Google sign-in…';
+  loginMsg.textContent = '';
+  retryAccessBtn.style.display = 'none';
+  try{
+    await gasCall('list', { prefix: '' });
+    gateMessage.textContent = 'Signed in. Log in as Admin/Chef 1/Chef 2, or leave blank to view only.';
+  }catch(err){
+    showAccessError('We couldn\'t verify your Google sign-in. Make sure you\'re signed into your company Google account in this browser, then try again.');
+  }
+}
+
+retryAccessBtn.addEventListener('click', checkAccess);
+enterAppBtn.addEventListener('click', showApp);
+document.getElementById('logoutBtn').addEventListener('click', ()=>location.reload());
+
+checkAccess();
+</script>
+</body>
+</html>
