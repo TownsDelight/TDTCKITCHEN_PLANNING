@@ -2178,13 +2178,34 @@ async function persistPackages(){
     }
   }catch(e){ console.error('Storage error', e); }
 }
-
 async function loadInventory(){
   try{
     const res = localStorage.getItem(INVENTORY_KEY);
     inventory = res ? JSON.parse(res) : [];
-  }catch(e){ inventory = []; }
-  renderInventory();
+  }catch(e){
+    inventory = [];
+  }
+  if (typeof renderInventoryTable === 'function') {
+    renderInventoryTable();
+  } else if (typeof renderInventory === 'function') {
+    renderInventory();
+  }
+}
+
+async function persistInventory(){
+  try{
+    localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      fetch(GOOGLE_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveInventory", data: inventory })
+      });
+    }
+  }catch(e){
+    console.error('Storage error', e);
+  }
 }
 
 async function persistBatchCounter(){
@@ -2193,26 +2214,16 @@ async function persistBatchCounter(){
   }catch(e){ console.error('Storage error', e); }
 }
 
-  function formatBatchNumber(date, n){
-    const monthAbbr = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    return monthAbbr + n;
-  }
-
-  // ---------- Inventory history (audit trail) ----------
-  const HISTORY_KEY = 'kitchen-inventory-history';
-  let inventoryHistory = [];
-
-async function loadInventoryHistory(){
+async function loadBatchCounter(){
   try{
-    const res = localStorage.getItem(HISTORY_KEY);
-    inventoryHistory = res ? JSON.parse(res) : [];
+    const res = localStorage.getItem(BATCH_KEY);
+    batchCounter = res ? parseInt(res, 10) : 1;
   }catch(e){
-    inventoryHistory = [];
+    batchCounter = 1;
   }
-  renderHistoryPanel();
 }
 
- async function persistInventoryHistory(){
+async function persistInventoryHistory(){
   try{
     localStorage.setItem(INV_HIST_KEY, JSON.stringify(inventoryHistory));
     if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
@@ -2225,6 +2236,7 @@ async function loadInventoryHistory(){
     }
   }catch(e){ console.error('Storage error', e); }
 }
+
 
   function logInventoryChange(itemName, uom, oldQty, newQty, reason){
     inventoryHistory.unshift({
