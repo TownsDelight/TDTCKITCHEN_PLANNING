@@ -1525,7 +1525,7 @@
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
     <h1>Kitchen Cost Rail</h1>
-    <p id="gateMessage">Checking your company Google sign-in…</p>
+    <p id="gateMessage">Connecting to your kitchen database…</p>
     <button type="button" id="retryAccessBtn" style="display:none;">Try again</button>
     <div class="login-msg" id="loginMsg"></div>
 
@@ -2044,10 +2044,16 @@
     </div>
   </section>
 
-  <p class="footer-note">Data is stored privately for this device — Kitchen Cost Rail, Commissary Operations Dashboard.</p>
+  <p class="footer-note">Data is shared through your team's Google Sheet — Kitchen Cost Rail, Commissary Operations Dashboard.</p>
 </div>
 
 <script>
+// Shared Google Apps Script Web App URL — this is the ONLY database now.
+// Used for recipes/inventory/packages/production-plans AND (via the small
+// key-value actions get/set/delete/list below) for Master Archive and
+// Manage Access, so every feature reads and writes the same Google Sheet.
+const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwezR-b95OrwkPJ12G0xQsp-lvZ_Ki7dWe4-J4B-oHMkF4UWbgsD1p7I6cx0aSAmJzbPA/exec";
+
 function initApp(){
   const PHP = n => '₱' + (Number(n)||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
   const STORAGE_KEY = 'kitchen-recipes';
@@ -2055,14 +2061,15 @@ function initApp(){
   const PACKAGES_KEY = 'kitchen-packages';
   const INVENTORY_KEY = 'kitchen-inventory';
   const BATCH_COUNTER_KEY = 'kitchen-batch-counter';
-  const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwezR-b95OrwkPJ12G0xQsp-lvZ_Ki7dWe4-J4B-oHMkF4UWbgsD1p7I6cx0aSAmJzbPA/exec";
+  const INV_HIST_KEY = 'kitchen-inventory-history';
   const UOMS = ['kg','g','L','mL','pcs','pack','can','box','dozen','bundle'];
   const BATCH_KEY = BATCH_COUNTER_KEY;
-  
+
   let recipes = [];
   let plans = [];
   let packages = [];
   let inventory = [];
+  let inventoryHistory = [];
   let batchCounter = 0;
   let rowIdCounter = 0;
   let sortState = { key:'name', dir:1 };
@@ -2070,222 +2077,276 @@ function initApp(){
   let editingProdId = null;
   let editingPkgId = null;
 
-async function syncFromGoogleSheets() {
-  if (typeof GOOGLE_SHEET_URL === 'undefined' || !GOOGLE_SHEET_URL) return;
-  try {
-    const res = await fetch(GOOGLE_SHEET_URL);
+  // Has this browser successfully pulled the sheet at least once this
+  // session? Until it has, loadX() falls back to this device's local cache
+  // (offline use). Once it has, the sheet is the only source of truth —
+  // localStorage is just a mirror of the last thing we saw from it.
+  let syncedOnce = false;
+
+  // Snapshots of what the sheet held the last time we successfully read or
+  // wrote it. persist*() diffs the in-memory array against its snapshot to
+  // work out exactly what THIS browser changed, then re-applies just that
+  // change on top of a fresh read of the sheet — so saving never blindly
+  // stomps on something another browser added or edited in the meantime.
+  let lastSyncedRecipes = [];
+  let lastSyncedInventory = [];
+  let lastSyncedPackages = [];
+  let lastSyncedPlans = [];
+  let syncedHistoryIds = new Set();
+
+  function cloneArr(a){ return JSON.parse(JSON.stringify(a || [])); }
+
+  function diffAgainstSnapshot(snapshotArr, localArr, idKey){
+    const snapMap = new Map((snapshotArr||[]).map(x=>[x[idKey], x]));
+    const localMap = new Map((localArr||[]).map(x=>[x[idKey], x]));
+    const added = [], updated = [], removedIds = [];
+    localMap.forEach((item, id)=>{
+      if(!snapMap.has(id)) added.push(item);
+      else if(JSON.stringify(snapMap.get(id)) !== JSON.stringify(item)) updated.push(item);
+    });
+    snapMap.forEach((item, id)=>{
+      if(!localMap.has(id)) removedIds.push(id);
+    });
+    return { added, updated, removedIds };
+  }
+
+  function applyDeltaToServerArr(serverArr, delta, idKey){
+    let result = (serverArr||[]).filter(x => !delta.removedIds.includes(x[idKey]));
+    result = result.map(x=>{
+      const upd = delta.updated.find(u=>u[idKey]===x[idKey]);
+      return upd || x;
+    });
+    delta.added.forEach(a=>{
+      if(!result.find(x=>x[idKey]===a[idKey])) result.unshift(a);
+    });
+    return result;
+  }
+
+  async function fetchServerSnapshot(){
+    const res = await fetch(GOOGLE_SHEET_URL, { cache:'no-store' });
     const db = await res.json();
-    
-    if (db.recipes && db.recipes !== "[]") localStorage.setItem(STORAGE_KEY, db.recipes);
-    if (db.inventory && db.inventory !== "[]") localStorage.setItem(INVENTORY_KEY, db.inventory);
-    if (db.packages && db.packages !== "[]") localStorage.setItem(PACKAGES_KEY, db.packages);
-    if (db.production_plans && db.production_plans !== "[]") localStorage.setItem(PLANS_KEY, db.production_plans);
-
-    if (typeof loadRecipes === 'function') loadRecipes();
-    if (typeof loadInventory === 'function') loadInventory();
-    if (typeof loadPackages === 'function') loadPackages();
-    if (typeof loadPlans === 'function') loadPlans();
-  } catch (e) {
-    console.error('Failed to sync from Google Sheets:', e);
+    const parseArr = v => (v && v !== "[]") ? JSON.parse(v) : [];
+    return {
+      recipes: parseArr(db.recipes),
+      inventory: parseArr(db.inventory),
+      packages: parseArr(db.packages),
+      production_plans: parseArr(db.production_plans),
+      inventory_history: Array.isArray(db.inventory_history) ? db.inventory_history : []
+    };
   }
-}
 
-window.addEventListener('DOMContentLoaded', syncFromGoogleSheets);
-  
+  function pushToSheet(action, data){
+    // no-cors: fire-and-forget — we can't read the response body, but we
+    // always merge against a fresh server read (above) before calling this,
+    // so we already know this write is safe to make.
+    return fetch(GOOGLE_SHEET_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action, data })
+    }).catch(e=>console.error('Sheet save failed (offline?):', e));
+  }
+
+  // Pulls the latest data from the Google Sheet and refreshes every panel.
+  // Called before the app renders, after every save, on a timer, and when
+  // the tab regains focus — so every browser looks at the sheet, never a
+  // stale local copy.
+  async function syncFromGoogleSheets(){
+    if(!GOOGLE_SHEET_URL) return false;
+    try{
+      const db = await fetchServerSnapshot();
+      recipes = db.recipes;
+      inventory = db.inventory;
+      packages = db.packages;
+      plans = db.production_plans;
+      lastSyncedRecipes = cloneArr(recipes);
+      lastSyncedInventory = cloneArr(inventory);
+      lastSyncedPackages = cloneArr(packages);
+      lastSyncedPlans = cloneArr(plans);
+
+      // History is append-only — merge the sheet's rows with anything this
+      // browser has logged but not confirmed synced yet, instead of
+      // overwriting either side.
+      const localOnly = inventoryHistory.filter(h => h.id && !syncedHistoryIds.has(h.id));
+      inventoryHistory = db.inventory_history.concat(localOnly);
+      inventoryHistory.sort((a,b)=> new Date(b.date) - new Date(a.date));
+      if(inventoryHistory.length > 300) inventoryHistory.length = 300;
+      syncedHistoryIds = new Set(db.inventory_history.map(h=>h.id).filter(Boolean));
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+      localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+      localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
+      localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+      localStorage.setItem(INV_HIST_KEY, JSON.stringify(inventoryHistory));
+
+      syncedOnce = true;
+      if (typeof renderRecipeList === 'function') renderRecipeList();
+      if (typeof renderProcurement === 'function') renderProcurement();
+      if (typeof renderInventoryTable === 'function') renderInventoryTable();
+      if (typeof renderPackageList === 'function') renderPackageList();
+      if (typeof renderPlans === 'function') renderPlans();
+      if (typeof renderHistoryPanel === 'function') renderHistoryPanel();
+      if (typeof renderProductionList === 'function') renderProductionList();
+      return true;
+    }catch(e){
+      console.error('Failed to sync from Google Sheets:', e);
+      return false;
+    }
+  }
+
   // ---------- Storage ----------
- async function loadRecipes(){
-  try{
-    const res = localStorage.getItem(STORAGE_KEY);
-    recipes = res ? JSON.parse(res) : [];
-  }catch(e){
-    recipes = [];
-  }
-  renderRecipeList();
-  renderProcurement();
-}
-
-async function persistRecipes(){
-  try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
-    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveRecipes", data: recipes })
-      });
+  // Once syncFromGoogleSheets() has run this session, these five loadX()
+  // functions just render what's already in memory — the sheet IS the data.
+  // They only fall back to this device's local cache when the sheet was
+  // unreachable (offline use), instead of it being the primary source.
+  async function loadRecipes(){
+    if(!syncedOnce){
+      try{
+        const res = localStorage.getItem(STORAGE_KEY);
+        recipes = res ? JSON.parse(res) : [];
+      }catch(e){ recipes = []; }
     }
-  }catch(e){
-    console.error('Storage error', e);
+    renderRecipeList();
+    renderProcurement();
   }
-}
-async function persistPlans(){
-  try{
-    localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
-    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "savePlans", data: plans })
-      });
+
+  async function persistRecipes(){
+    try{
+      const delta = diffAgainstSnapshot(lastSyncedRecipes, recipes, 'id');
+      if(GOOGLE_SHEET_URL){
+        try{
+          const fresh = await fetchServerSnapshot();
+          recipes = applyDeltaToServerArr(fresh.recipes, delta, 'id');
+        }catch(e){ /* offline — save what we have locally instead */ }
+      }
+      lastSyncedRecipes = cloneArr(recipes);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+      if(GOOGLE_SHEET_URL) pushToSheet('saveRecipes', recipes);
+      renderRecipeList();
+      renderProcurement();
+    }catch(e){ console.error('Storage error', e); }
+  }
+
+  async function loadPlans(){
+    if(!syncedOnce){
+      try{
+        const res = localStorage.getItem(PLANS_KEY);
+        plans = res ? JSON.parse(res) : [];
+      }catch(e){ plans = []; }
     }
-  }catch(e){ console.error('Storage error', e); }
-}
-
-async function loadPackages(){
-  try{
-    const res = localStorage.getItem(PACKAGES_KEY);
-    packages = res ? JSON.parse(res) : [];
-  }catch(e){
-    packages = [];
+    if (typeof renderPlans === 'function') renderPlans();
   }
-  renderPackageList();
-}
 
-async function persistPackages(){
-  try{
-    localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
-    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "savePackages", data: packages })
-      });
+  async function persistPlans(){
+    try{
+      const delta = diffAgainstSnapshot(lastSyncedPlans, plans, 'id');
+      if(GOOGLE_SHEET_URL){
+        try{
+          const fresh = await fetchServerSnapshot();
+          plans = applyDeltaToServerArr(fresh.production_plans, delta, 'id');
+        }catch(e){ /* offline */ }
+      }
+      lastSyncedPlans = cloneArr(plans);
+      localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+      if(GOOGLE_SHEET_URL) pushToSheet('savePlans', plans);
+      if (typeof renderPlans === 'function') renderPlans();
+    }catch(e){ console.error('Storage error', e); }
+  }
+
+  async function loadPackages(){
+    if(!syncedOnce){
+      try{
+        const res = localStorage.getItem(PACKAGES_KEY);
+        packages = res ? JSON.parse(res) : [];
+      }catch(e){ packages = []; }
     }
-  }catch(e){
-    console.error('Storage error', e);
+    renderPackageList();
   }
-}
-async function loadPackages(){
-  try{
-    const res = localStorage.getItem(PACKAGES_KEY);
-    packages = res ? JSON.parse(res) : [];
-  }catch(e){ packages = []; }
-  renderPackageList();
-}
 
-async function persistPackages(){
-  try{
-    localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
-    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "savePackages", data: packages })
-      });
+  async function persistPackages(){
+    try{
+      const delta = diffAgainstSnapshot(lastSyncedPackages, packages, 'id');
+      if(GOOGLE_SHEET_URL){
+        try{
+          const fresh = await fetchServerSnapshot();
+          packages = applyDeltaToServerArr(fresh.packages, delta, 'id');
+        }catch(e){ /* offline */ }
+      }
+      lastSyncedPackages = cloneArr(packages);
+      localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
+      if(GOOGLE_SHEET_URL) pushToSheet('savePackages', packages);
+      renderPackageList();
+    }catch(e){ console.error('Storage error', e); }
+  }
+
+  async function loadInventory(){
+    if(!syncedOnce){
+      try{
+        const res = localStorage.getItem(INVENTORY_KEY);
+        inventory = res ? JSON.parse(res) : [];
+      }catch(e){ inventory = []; }
     }
-  }catch(e){ console.error('Storage error', e); }
-}
-  
-async function loadInventory(){
-  try{
-    const res = localStorage.getItem(INVENTORY_KEY);
-    inventory = res ? JSON.parse(res) : [];
-  }catch(e){
-    inventory = [];
+    if (typeof renderInventoryTable === 'function') renderInventoryTable();
+    else if (typeof renderInventory === 'function') renderInventory();
   }
-  if (typeof renderInventoryTable === 'function') {
-    renderInventoryTable();
-  } else if (typeof renderInventory === 'function') {
-    renderInventory();
-  }
-}
 
-async function persistInventory(){
-  try{
-    localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
-    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveInventory", data: inventory })
-      });
+  async function persistInventory(){
+    try{
+      const delta = diffAgainstSnapshot(lastSyncedInventory, inventory, 'key');
+      if(GOOGLE_SHEET_URL){
+        try{
+          const fresh = await fetchServerSnapshot();
+          inventory = applyDeltaToServerArr(fresh.inventory, delta, 'key');
+        }catch(e){ /* offline */ }
+      }
+      lastSyncedInventory = cloneArr(inventory);
+      localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+      if(GOOGLE_SHEET_URL) pushToSheet('saveInventory', inventory);
+    }catch(e){ console.error('Storage error', e); }
+  }
+
+  async function persistBatchCounter(){
+    try{ localStorage.setItem(BATCH_KEY, String(batchCounter)); }
+    catch(e){ console.error('Storage error', e); }
+  }
+
+  async function loadBatchCounter(){
+    try{
+      const res = localStorage.getItem(BATCH_KEY);
+      batchCounter = res ? parseInt(res, 10) : 1;
+    }catch(e){ batchCounter = 1; }
+  }
+
+  async function loadInventoryHistory(){
+    if(!syncedOnce){
+      try{
+        const res = localStorage.getItem(INV_HIST_KEY);
+        inventoryHistory = res ? JSON.parse(res) : [];
+      }catch(e){ inventoryHistory = []; }
     }
-  }catch(e){
-    console.error('Storage error', e);
+    if (typeof renderHistoryPanel === 'function') renderHistoryPanel();
   }
-}
 
-async function persistBatchCounter(){
-  try{
-    localStorage.setItem(BATCH_KEY, String(batchCounter));
-  }catch(e){ console.error('Storage error', e); }
-}
-
-async function loadBatchCounter(){
-  try{
-    const res = localStorage.getItem(BATCH_KEY);
-    batchCounter = res ? parseInt(res, 10) : 1;
-  }catch(e){
-    batchCounter = 1;
+  // History is append-only, so we only ever send entries this browser
+  // hasn't already confirmed the sheet has — never the whole log. (Sending
+  // the whole log every time was duplicating every past entry on every
+  // single stock change.)
+  async function persistInventoryHistory(){
+    try{
+      localStorage.setItem(INV_HIST_KEY, JSON.stringify(inventoryHistory));
+      if(GOOGLE_SHEET_URL){
+        const unsynced = inventoryHistory.filter(h => h.id && !syncedHistoryIds.has(h.id));
+        if(unsynced.length){
+          pushToSheet('saveInventoryHistory', unsynced);
+          unsynced.forEach(h=>syncedHistoryIds.add(h.id));
+        }
+      }
+    }catch(e){ console.error('Storage error', e); }
   }
-}
-
-async function loadInventoryHistory(){
-  try{
-    const res = localStorage.getItem(INV_HIST_KEY);
-    inventoryHistory = res ? JSON.parse(res) : [];
-  }catch(e){
-    inventoryHistory = [];
-  }
-  if (typeof renderHistoryPanel === 'function') {
-    renderHistoryPanel();
-  }
-}
-
-async function persistInventoryHistory(){
-  try{
-    localStorage.setItem(INV_HIST_KEY, JSON.stringify(inventoryHistory));
-    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveInventoryHistory", data: inventoryHistory })
-      });
-    }
-  }catch(e){ console.error('Storage error', e); }
-}
- function formatBatchNumber(date, n){
-  const d = date ? new Date(date) : new Date();
-  const monthAbbr = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-  return `${monthAbbr}${n}`;
-}
-
-async function loadPlans(){
-  try{
-    const res = localStorage.getItem(PLANS_KEY);
-    plans = res ? JSON.parse(res) : [];
-  }catch(e){
-    plans = [];
-  }
-  if (typeof renderPlans === 'function') {
-    renderPlans();
-  }
-}
-
-async function persistPlans(){
-  try{
-    localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
-    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "savePlans", data: plans })
-      });
-    }
-  }catch(e){
-    console.error('Storage error', e);
-  }
-}
 
   function logInventoryChange(itemName, uom, oldQty, newQty, reason){
     inventoryHistory.unshift({
+      id: 'h-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
       date: new Date().toISOString(),
       user: currentUser || 'Unnamed user',
       item: itemName,
@@ -2305,6 +2366,7 @@ async function persistPlans(){
   // ingredients" tracking requirement.
   function logStockEvent(itemName, uom, note){
     inventoryHistory.unshift({
+      id: 'h-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
       date: new Date().toISOString(),
       user: currentUser || 'Unnamed user',
       item: itemName,
@@ -4500,32 +4562,50 @@ async function persistPlans(){
   addFoodRow();
   addPkgRow(pkgMiscRowsEl,'misc');
   loadBatchCounter();
-  loadPackages();
-  loadInventoryHistory();
   renderCcpBoard();
   applyStaticAccessControl();
-  (async function initRecipesAndInventory(){
+  (async function initFromSheet(){
+    // Pull the Google Sheet FIRST and wait for it, so the very first render
+    // already shows the real, shared data — not an empty or stale local
+    // copy. This is what was missing before: the old sync call was wired to
+    // an event that had already fired by the time this ran, so it silently
+    // never executed.
+    await syncFromGoogleSheets();
     await loadRecipes();
     await loadPlans();
+    await loadPackages();
     await loadInventory();
+    await loadInventoryHistory();
     await syncProductionCommitments();
     renderProductionList();
     applyStaticAccessControl();
+
+    // Keep every open browser fresh even if nobody on it saves anything:
+    // re-pull from the sheet periodically and whenever the tab regains
+    // focus, but never while someone is mid-edit on a form (so we don't
+    // yank a half-filled recipe/plan/package out from under them).
+    setInterval(()=>{
+      if(!editingId && !editingProdId && !editingPkgId) syncFromGoogleSheets();
+    }, 45000);
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState === 'visible' && !editingId && !editingProdId && !editingPkgId){
+        syncFromGoogleSheets();
+      }
+    });
   })();
 }
 
 // =====================================================================
 // ONLINE / TEAM ACCESS SETUP (Google Sheets + Apps Script)
-// Paste the Web App URL you get after deploying the Apps Script below.
-// Access is restricted to your company's Google Workspace domain via the
-// Apps Script deployment setting ("Anyone within [yourcompany.com]") —
-// your team's existing Google sign-in handles the login, no password
-// screen needed here.
+// This now reuses the SAME Apps Script deployment as the recipes/inventory
+// database (GOOGLE_SHEET_URL, declared near the top of the previous
+// <script> block) for Master Archive snapshots and the Manage Access
+// on/off switches, via a small key-value API (get/set/delete/list) added
+// to Code.gs. Nothing to paste here anymore — just make sure the Apps
+// Script backend below has been redeployed with the updated Code.gs.
 // =====================================================================
-const GAS_WEB_APP_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL';
-
 async function gasCall(action, payload){
-  const res = await fetch(GAS_WEB_APP_URL, {
+  const res = await fetch(GOOGLE_SHEET_URL, {
     method: 'POST',
     // text/plain avoids a CORS preflight that Apps Script doesn't handle well
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -4535,28 +4615,26 @@ async function gasCall(action, payload){
   try{
     return JSON.parse(text);
   }catch(e){
-    // Got HTML back instead of JSON — usually means the browser isn't
-    // signed into an allowed Google account for this Apps Script.
-    throw new Error('NOT_SIGNED_IN');
+    // Got something back that isn't JSON — usually means the Apps Script
+    // deployment needs to be redeployed, or the URL above is wrong.
+    throw new Error('BACKEND_UNREACHABLE');
   }
 }
 
-if(GAS_WEB_APP_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL'){
-  window.storage = {
-    async get(key){
-      return await gasCall('get', { key: key });
-    },
-    async set(key, value){
-      return await gasCall('set', { key: key, value: value });
-    },
-    async delete(key){
-      return await gasCall('delete', { key: key });
-    },
-    async list(prefix){
-      return await gasCall('list', { prefix: prefix });
-    }
-  };
-}
+window.storage = {
+  async get(key){
+    return await gasCall('get', { key: key });
+  },
+  async set(key, value){
+    return await gasCall('set', { key: key, value: value });
+  },
+  async delete(key){
+    return await gasCall('delete', { key: key });
+  },
+  async list(prefix){
+    return await gasCall('list', { prefix: prefix });
+  }
+};
 
 // ---------- Access levels (3 fixed accounts) ----------
 // Admin   (username "admin", password "admin1"):  full access, incl. Master Archive & Manage Access
@@ -4661,20 +4739,14 @@ function showAccessError(message){
 }
 
 async function checkAccess(){
-  if(GAS_WEB_APP_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL'){
-    // Not configured yet — data saves to this device only, no online setup active.
-    gateMessage.textContent = 'Log in as Admin/Chef 1/Chef 2, or leave blank to view only.';
-    retryAccessBtn.style.display = 'none';
-    return;
-  }
-  gateMessage.textContent = 'Checking your company Google sign-in…';
+  gateMessage.textContent = 'Connecting to your kitchen database…';
   loginMsg.textContent = '';
   retryAccessBtn.style.display = 'none';
   try{
     await gasCall('list', { prefix: '' });
-    gateMessage.textContent = 'Signed in. Log in as Admin/Chef 1/Chef 2, or leave blank to view only.';
+    gateMessage.textContent = 'Connected. Log in as Admin/Chef 1/Chef 2, or leave blank to view only.';
   }catch(err){
-    showAccessError('We couldn\'t verify your Google sign-in. Make sure you\'re signed into your company Google account in this browser, then try again.');
+    showAccessError('We couldn\'t reach the Google Sheet database. Check your internet connection, or that the Apps Script (Code.gs) has been redeployed, then try again.');
   }
 }
 
