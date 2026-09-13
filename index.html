@@ -2078,29 +2078,34 @@ async function syncFromGoogleSheets() {
     const db = await res.json();
 
     if (db) {
+      // Direct update for Recipes from Sheets
       if (db.recipes) {
         recipes = typeof db.recipes === 'string' ? JSON.parse(db.recipes) : db.recipes;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
       }
+      
       if (db.inventory) {
         inventory = typeof db.inventory === 'string' ? JSON.parse(db.inventory) : db.inventory;
         localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
       }
+
       if (db.packages) {
         packages = typeof db.packages === 'string' ? JSON.parse(db.packages) : db.packages;
         localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
       }
+
       if (db.production_plans || db.plans) {
         const rawPlans = db.production_plans || db.plans;
         plans = typeof rawPlans === 'string' ? JSON.parse(rawPlans) : rawPlans;
         localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
       }
-    }
 
-    if (typeof loadRecipes === 'function') loadRecipes();
-    if (typeof loadInventory === 'function') loadInventory();
-    if (typeof loadPackages === 'function') loadPackages();
-    if (typeof loadPlans === 'function') loadPlans();
+      // Force UI updates immediately after cloud sync resolves
+      if (typeof renderRecipeCards === 'function') renderRecipeCards();
+      if (typeof renderRecipeList === 'function') renderRecipeList();
+      if (typeof renderPlans === 'function') renderPlans();
+      if (typeof renderInventoryTable === 'function') renderInventoryTable();
+    }
   } catch (e) {
     console.error("Failed to sync from Google Sheets:", e);
   }
@@ -2109,29 +2114,33 @@ async function syncFromGoogleSheets() {
 window.addEventListener('DOMContentLoaded', syncFromGoogleSheets);
   
   // ---------- Storage ----------
- async function loadRecipes(){
-  try{
+async function loadRecipes() {
+  try {
     const res = localStorage.getItem(STORAGE_KEY);
-    recipes = res ? JSON.parse(res) : [];
-  }catch(e){
-    recipes = [];
+    // Only parse local cache if recipes is currently empty
+    if (res && (!recipes || recipes.length === 0)) {
+      recipes = JSON.parse(res);
+    }
+  } catch (e) {
+    console.error("Error loading recipes:", e);
   }
-  renderRecipeList();
-  renderProcurement();
+  
+  if (typeof renderRecipeCards === 'function') renderRecipeCards();
+  if (typeof renderRecipeList === 'function') renderRecipeList();
 }
 
-async function persistRecipes(){
-  try{
+async function persistRecipes() {
+  try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
     if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
-      fetch(GOOGLE_SHEET_URL, {
+      await fetch(GOOGLE_SHEET_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "saveRecipes", data: recipes })
       });
     }
-  }catch(e){
+  } catch(e) {
     console.error('Storage error', e);
   }
 }
