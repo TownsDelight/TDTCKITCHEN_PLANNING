@@ -2647,14 +2647,14 @@ async function persistPlans(){
       const linkedHtml = linked.length > 0
         ? `<div class="inv-linked">
              <span class="inv-linked-label">Waiting on this (Hold):</span>
-             ${linked.map(p => `<span class="batch-tag" title="${escapeHtml(p.eventName)}">#${escapeHtml(p.batchNumber || '—')}</span>`).join('')}
+           ${linked.map(p => `<span class="batch-tag" title="${escapeHtml(p.eventName)}">#${escapeHtml(p.batchNumber || '-')}</span>`).join('')}</div>`
            </div>`
         : `<div class="inv-linked inv-linked-empty">Not needed by any Hold production</div>`;
       const availabilityHtml = needed > 0
         ? `<div class="inv-availability">
              <span>On hand: <b>${(item.stock||0).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
              <span>Needed (on hold): <b>${needed.toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
-             <span>Short by: <b>${Math.max(0,needed-(item.stock||0)).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
+            <span>Short by: <b>${Math.max(0,needed-(item.stock||0)).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
            </div>`
         : '';
       return `
