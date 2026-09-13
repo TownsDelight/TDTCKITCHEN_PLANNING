@@ -2131,7 +2131,29 @@ async function loadRecipes() {
 
 async function persistRecipes() {
   try {
+    // 1. Fetch latest recipes from Google Sheets to prevent overwriting other browsers
+    if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
+      try {
+        const res = await fetch(GOOGLE_SHEET_URL + "?action=getAll");
+        const db = await res.json();
+        if (db && db.recipes) {
+          const remoteRecipes = typeof db.recipes === 'string' ? JSON.parse(db.recipes) : db.recipes;
+          
+          // Merge remote recipes with local recipes by ID
+          const recipeMap = new Map();
+          remoteRecipes.forEach(r => recipeMap.set(r.id, r));
+          recipes.forEach(r => recipeMap.set(r.id, r));
+          recipes = Array.from(recipeMap.values());
+        }
+      } catch (err) {
+        console.warn("Couldn't pull latest before save, using local state", err);
+      }
+    }
+
+    // 2. Update local storage cache
     localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+
+    // 3. Save merged array back to Google Sheets
     if (typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL) {
       await fetch(GOOGLE_SHEET_URL, {
         method: "POST",
@@ -4676,7 +4698,11 @@ async function showApp(){
   currentUser = typedName || login.label;
   loginScreen.style.display = 'none';
   appWrap.style.display = 'block';
-  initApp();
+
+  await syncFromGoogleSheets();
+  if (typeof loadRecipes === 'function') await loadRecipes();
+  if (typeof loadPlans === 'function') await loadPlans();
+  if (typeof loadInventory === 'function') await loadInventory();
 }
 
 function showAccessError(message){
