@@ -2317,6 +2317,19 @@ function initApp(){
     }catch(e){ batchCounter = 1; }
   }
 
+  // Builds the human-readable batch number shown on production cards, e.g.
+  // "B260916-004" (B + 2-digit year + 2-digit month + 2-digit day, then a
+  // zero-padded running counter). This was being called but was missing
+  // from the file, which threw a ReferenceError and silently killed every
+  // "Schedule production" click before it could save anything.
+  function formatBatchNumber(date, counter){
+    const yy = String(date.getFullYear()).slice(-2);
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const seq = String(counter).padStart(3, '0');
+    return 'B' + yy + mm + dd + '-' + seq;
+  }
+
   async function loadInventoryHistory(){
     if(!syncedOnce){
       try{
