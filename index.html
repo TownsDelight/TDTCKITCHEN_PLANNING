@@ -2052,7 +2052,7 @@
 // Used for recipes/inventory/packages/production-plans AND (via the small
 // key-value actions get/set/delete/list below) for Master Archive and
 // Manage Access, so every feature reads and writes the same Google Sheet.
-const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyfzXxz541aL1AeyvabV_pRjQnaPX2k6LHjXPPbiuGU1UqmLZneSxEy8XceYXiPbmPY2Q/exec";
+const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwezR-b95OrwkPJ12G0xQsp-lvZ_Ki7dWe4-J4B-oHMkF4UWbgsD1p7I6cx0aSAmJzbPA/exec";
 
 function initApp(){
   const PHP = n => '₱' + (Number(n)||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -2905,6 +2905,11 @@ function initApp(){
   });
 
   saveBtn.addEventListener('click', async ()=>{
+    if(saveBtn.disabled) return; // ignore extra clicks while a save is in flight
+    saveBtn.disabled = true;
+    const _saveBtnLabel = saveBtn.textContent;
+    saveBtn.textContent = 'Saving…';
+    try{
     const name = document.getElementById('recipeName').value.trim();
     const category = document.getElementById('recipeCategory').value;
     const yieldVal = parseFloat(document.getElementById('recipeYield').value) || 0;
@@ -2973,6 +2978,10 @@ function initApp(){
       formMsg.textContent = 'Saved "' + name + '" to your recipe cards.';
       formMsg.className = 'form-msg ok';
       resetForm();
+    }
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = _saveBtnLabel;
     }
   });
 
@@ -3442,6 +3451,11 @@ function initApp(){
   });
 
   saveProdBtn.addEventListener('click', async ()=>{
+    if(saveProdBtn.disabled) return; // ignore extra clicks while a save is in flight
+    saveProdBtn.disabled = true;
+    const _saveProdBtnLabel = saveProdBtn.textContent;
+    saveProdBtn.textContent = 'Saving…';
+    try{
     const eventName = document.getElementById('prodEvent').value.trim();
     const eventDate = document.getElementById('prodEventDate').value;
     const recipeId = prodRecipeEl.value;
@@ -3538,6 +3552,10 @@ function initApp(){
       prodFormMsg.textContent = 'Scheduled "' + eventName + '" as batch #' + batchNumber + (committed ? ' — ingredients reserved from stock.' : ' — on Hold, short of stock.');
       prodFormMsg.className = 'form-msg ok';
       resetProdForm();
+    }
+    } finally {
+      saveProdBtn.disabled = false;
+      saveProdBtn.textContent = _saveProdBtnLabel;
     }
   });
 
@@ -4200,6 +4218,11 @@ function initApp(){
   });
 
   savePkgBtn.addEventListener('click', async ()=>{
+    if(savePkgBtn.disabled) return; // ignore extra clicks while a save is in flight
+    savePkgBtn.disabled = true;
+    const _savePkgBtnLabel = savePkgBtn.textContent;
+    savePkgBtn.textContent = 'Saving…';
+    try{
     const soNumber = document.getElementById('pkgSoNumber').value.trim();
     const name = document.getElementById('pkgName').value.trim();
     const pax = parseFloat(document.getElementById('pkgPax').value) || 0;
@@ -4261,6 +4284,10 @@ function initApp(){
       pkgFormMsg.textContent = 'Saved "' + name + '" package.';
       pkgFormMsg.className = 'form-msg ok';
       resetPkgForm();
+    }
+    } finally {
+      savePkgBtn.disabled = false;
+      savePkgBtn.textContent = _savePkgBtnLabel;
     }
   });
 
