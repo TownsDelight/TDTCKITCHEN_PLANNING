@@ -2641,85 +2641,37 @@ async function persistPlans(){
       });
     }
 
-    function invCard(item){
-      const linked = getLinkedPlansForIngredient(item.key);
-      const needed = getReservedQty(item.name, item.uom);
-      const linkedHtml = linked.length > 0
+function invCard(item){
+    const linked = getLinkedPlansForIngredient(item.key);
+    const needed = getReservedQty(item.name, item.uom);
+    const linkedHtml = linked.length > 0
         ? `<div class="inv-linked">
-             <span class="inv-linked-label">Waiting on this (Hold):</span>
-           ${linked.map(p => `<span class="batch-tag" title="${escapeHtml(p.eventName)}">#${escapeHtml(p.batchNumber || '-')}</span>`).join('')}</div>`
-           </div>`
+            <span class="inv-linked-label">Waiting on this (Hold):</span>
+            ${linked.map(p => `<span class="batch-tag" title="${escapeHtml(p.eventName)}">#${escapeHtml(p.batchNumber || '-')}</span>`).join('')}
+          </div>`
         : `<div class="inv-linked inv-linked-empty">Not needed by any Hold production</div>`;
-      const availabilityHtml = needed > 0
+    const availabilityHtml = needed > 0
         ? `<div class="inv-availability">
-             <span>On hand: <b>${(item.stock||0).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
-             <span>Needed (on hold): <b>${needed.toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
-            <span>Short by: <b>${Math.max(0,needed-(item.stock||0)).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
-           </div>`
+            <span>On hand: <b>${(item.stock||0).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
+            <span>Needed (on hold): <b>${needed.toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
+            <span>Short by: <b>${Math.max(0, needed-(item.stock||0)).toLocaleString('en-PH',{maximumFractionDigits:2})}</b></span>
+          </div>`
         : '';
-      return `
-        <div class="kanban-card" data-key="${escapeHtml(item.key)}">
-          <div class="rname">${escapeHtml(item.name)}</div>
-          <div class="rmeta">${escapeHtml(item.uom)}</div>
-          <div class="inv-stock-row">
-            <label>Stock on hand</label>
-            <input type="number" class="stock-input" min="0" step="0.01" value="${item.stock || 0}" ${canEdit() ? '' : 'disabled title="Your access level does not allow editing stock."'}>
-          </div>
-          ${availabilityHtml}
-          ${linkedHtml}
-        </div>
-      `;
-    }
 
-    function invColumn(title, cssClass, items){
-      const cards = items.length === 0
+  function invColumn(title, cssClass, items){
+    const cards = items.length === 0
         ? '<div class="kanban-empty">Nothing here.</div>'
         : `<div class="kanban-cards">${items.map(invCard).join('')}</div>`;
-      return `
+    return `
         <div class="kanban-col ${cssClass}">
-          <div class="kanban-col-head">
-            <h3>${title}</h3>
-            <span class="kanban-count">${items.length}</span>
-          </div>
-          ${cards}
+            <div class="kanban-col-head">
+                <h3>${title}</h3>
+                <span class="kanban-count">${items.length}</span>
+            </div>
+            ${cards}
         </div>
-      `;
-    }
-
-    wrap.innerHTML = `
-      <div class="kanban-board inv-board">
-        ${invColumn('NO STOCK', 'hold', noStock)}
-        ${invColumn('IN STOCK', 'processing', inStock)}
-      </div>
     `;
-
-    wrap.querySelectorAll('.stock-input').forEach(input=>{
-      input.addEventListener('change', async (e)=>{
-        const key = e.target.closest('.kanban-card').dataset.key;
-        const item = inventory.find(i => i.key === key);
-        if(!item) return;
-        const oldQty = item.stock || 0;
-        const newQty = parseFloat(e.target.value) || 0;
-        if(newQty === oldQty) return;
-        const confirmed = window.confirm(
-          'Change stock on hand for "' + item.name + '" from ' + oldQty + ' to ' + newQty + ' ' + item.uom + '? This will be recorded in the change history.'
-        );
-        if(!confirmed){
-          e.target.value = oldQty;
-          return;
-        }
-        item.stock = newQty;
-        await persistInventory();
-        logInventoryChange(item.name, item.uom, oldQty, newQty, 'Manual stock update');
-        // Stock went up — see if any Hold production plans can now proceed.
-        await syncProductionCommitments();
-        renderInventoryTable();
-        renderProductionList();
-        updateRunEstimate();
-      });
-    });
-  }
-
+}
   const invSearchInputEl = document.getElementById('invSearchInput');
   if(invSearchInputEl) invSearchInputEl.addEventListener('input', renderInventoryTable);
 
