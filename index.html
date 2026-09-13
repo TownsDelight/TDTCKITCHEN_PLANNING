@@ -2072,21 +2072,37 @@ function initApp(){
 
 async function syncFromGoogleSheets() {
   if (typeof GOOGLE_SHEET_URL === 'undefined' || !GOOGLE_SHEET_URL) return;
+
   try {
-    const res = await fetch(GOOGLE_SHEET_URL);
+    const res = await fetch(GOOGLE_SHEET_URL + "?action=getAll");
     const db = await res.json();
-    
-    if (db.recipes && db.recipes !== "[]") localStorage.setItem(STORAGE_KEY, db.recipes);
-    if (db.inventory && db.inventory !== "[]") localStorage.setItem(INVENTORY_KEY, db.inventory);
-    if (db.packages && db.packages !== "[]") localStorage.setItem(PACKAGES_KEY, db.packages);
-    if (db.production_plans && db.production_plans !== "[]") localStorage.setItem(PLANS_KEY, db.production_plans);
+
+    if (db) {
+      if (db.recipes) {
+        recipes = typeof db.recipes === 'string' ? JSON.parse(db.recipes) : db.recipes;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+      }
+      if (db.inventory) {
+        inventory = typeof db.inventory === 'string' ? JSON.parse(db.inventory) : db.inventory;
+        localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+      }
+      if (db.packages) {
+        packages = typeof db.packages === 'string' ? JSON.parse(db.packages) : db.packages;
+        localStorage.setItem(PACKAGES_KEY, JSON.stringify(packages));
+      }
+      if (db.production_plans || db.plans) {
+        const rawPlans = db.production_plans || db.plans;
+        plans = typeof rawPlans === 'string' ? JSON.parse(rawPlans) : rawPlans;
+        localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+      }
+    }
 
     if (typeof loadRecipes === 'function') loadRecipes();
     if (typeof loadInventory === 'function') loadInventory();
     if (typeof loadPackages === 'function') loadPackages();
     if (typeof loadPlans === 'function') loadPlans();
   } catch (e) {
-    console.error('Failed to sync from Google Sheets:', e);
+    console.error("Failed to sync from Google Sheets:", e);
   }
 }
 
