@@ -1669,11 +1669,33 @@
 </div>
 
 <div class="access-modal-overlay" id="masterArchiveOverlay">
-  <div class="access-modal">
+  <div class="access-modal" style="max-width:640px;max-height:90vh;overflow-y:auto;">
     <h2>Master Archive</h2>
-    <p>Save a snapshot of every module (recipe cards, production plans, packages, inventory, and stock history) as a downloadable Excel workbook. Useful before switching to a new month of planning — previous snapshots stay listed here for re-download.</p>
-    <button type="button" class="print-btn" id="createArchiveBtn" style="margin-bottom:14px;">🗄 Save &amp; export new archive</button>
-    <p style="font-size:12px;color:var(--ink-soft);margin:0 0 6px;font-weight:600;">Previous archives</p>
+    <p>Wrap up the month: download everything from Production Planning and Saved Packages (plus recipes, stock and history) as one Excel workbook, keep a copy that can be re-opened any time in a read-only viewer, and optionally clear the boards for the new month.</p>
+
+    <label for="archiveLabelInput">Archive label</label>
+    <input type="text" id="archiveLabelInput" placeholder="e.g. September 2026">
+
+    <div class="dsp-note" style="margin-top:12px;background:#F7F5EE;color:#1B1E1A;">
+      <b>After saving, reset for the new month?</b>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;margin-top:8px;">
+        <input type="checkbox" id="archiveResetProd" style="width:auto;margin:3px 0 0;"> Reset Production Planning
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;margin:6px 0 0 26px;">
+        <input type="checkbox" id="archiveKeepActive" checked style="width:auto;margin:3px 0 0;"> Keep unfinished batches and cooked food not yet dispatched (recommended)
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;margin-top:8px;">
+        <input type="checkbox" id="archiveResetPkg" style="width:auto;margin:3px 0 0;"> Reset Saved Packages
+      </label>
+      <div style="font-size:11.5px;color:#6B6F66;margin-top:8px;">
+        The Calendar (events, food tastings, production dates, open/closed marks), recipes and inventory stock are never reset.
+      </div>
+    </div>
+
+    <button type="button" class="save-btn" id="createArchiveBtn" style="margin-top:14px;">🗄 Save &amp; export archive</button>
+    <div class="form-msg" id="archiveMsg"></div>
+
+    <p style="font-size:12px;color:var(--ink-soft);margin:16px 0 6px;font-weight:600;">Previous archives</p>
     <div id="archiveList"></div>
     <button type="button" class="print-btn" id="closeMasterArchiveBtn" style="margin-top:14px;">Close</button>
   </div>
@@ -5116,7 +5138,7 @@ function initApp(){
     const saved = calEvents.map(e => ({
       id: e.id,
       date: e.date,
-      kind: e.isTasting ? 'tasting' : 'event',
+      kind: e.isProd ? 'prod' : (e.isTasting ? 'tasting' : 'event'),
       title: e.venue,
       person: e.person || ''
     }));
@@ -5234,13 +5256,14 @@ function initApp(){
 
   // Assistant (chef2) and Viewer can look at events / food tastings, read-only.
   function openCalendarReadOnly(ev){
-    document.getElementById('calModalTitle').textContent = ev.isTasting ? 'Food tasting' : 'Event';
+    document.getElementById('calModalTitle').textContent = ev.isProd ? 'Production schedule (archived)' : (ev.isTasting ? 'Food tasting' : 'Event');
     calModalBody.innerHTML = `
       <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
         <tr><th style="text-align:left;">Date</th><td><b>${formatDateDisplay(ev.date)}</b></td></tr>
         <tr><th style="text-align:left;">Venue / event</th><td>${escapeHtml(ev.venue)}</td></tr>
         <tr><th style="text-align:left;">Person in charge</th><td>${escapeHtml(ev.person || '—')}</td></tr>
-        <tr><th style="text-align:left;">Type</th><td>${ev.isTasting ? 'Food tasting' : 'Event'}</td></tr>
+        <tr><th style="text-align:left;">Type</th><td>${ev.isProd ? 'Production schedule' : (ev.isTasting ? 'Food tasting' : 'Event')}</td></tr>
+        ${ev.note ? `<tr><th style="text-align:left;">Details</th><td>${escapeHtml(ev.note)}</td></tr>` : ''}
       </table>`;
     calFormMsg.textContent = '';
     calSaveBtn.style.display = 'none';
@@ -5250,6 +5273,12 @@ function initApp(){
 
   function openCalendarForm(id, prefillDate){
     const ev = id ? calEvents.find(e => e.id === id) : null;
+    if(ev && ev.isProd){
+      openCalendarReadOnly(ev);
+      calEditingId = id;
+      calDeleteBtn.style.display = canDelete() ? 'block' : 'none';
+      return;
+    }
     if(!canEdit()){
       if(ev) openCalendarReadOnly(ev);
       return;
@@ -6015,68 +6044,228 @@ function initApp(){
   }
 
   // ---------- Master Archive (admin only) ----------
+  // The index (small: label, date, counts) lives under one key. Each
+  // archive's data is stored separately, split into 40,000-character pieces
+  // because a single Google Sheets cell holds at most 50,000 characters.
   const MASTER_ARCHIVE_KEY = 'kitchen-master-archives';
+  const ARCH_DATA_PREFIX = 'kitchen-master-archive-data:';
+  const ARCH_CHUNK = 40000;
   let masterArchives = [];
 
   async function loadMasterArchives(){
     try{
       const res = await window.storage.get(MASTER_ARCHIVE_KEY, false);
       masterArchives = res && res.value ? JSON.parse(res.value) : [];
-    }catch(e){
-      masterArchives = [];
-    }
+    }catch(e){ masterArchives = []; }
   }
   async function persistMasterArchives(){
-    try{ await window.storage.set(MASTER_ARCHIVE_KEY, JSON.stringify(masterArchives), false); }
-    catch(e){ console.error('Storage error', e); }
+    await window.storage.set(MASTER_ARCHIVE_KEY, JSON.stringify(masterArchives), false);
   }
+  async function saveArchiveData(id, data){
+    const str = JSON.stringify(data);
+    const n = Math.max(1, Math.ceil(str.length / ARCH_CHUNK));
+    for(let i=0;i<n;i++){
+      // "C|" prefix so Sheets never reads a piece as a formula or number
+      await window.storage.set(ARCH_DATA_PREFIX + id + ':' + i, 'C|' + str.slice(i*ARCH_CHUNK, (i+1)*ARCH_CHUNK));
+    }
+    return n;
+  }
+  async function loadArchiveData(a){
+    if(a.data) return a.data;          // older archives stored inline
+    let str = '';
+    for(let i=0;i<(a.chunks||0);i++){
+      const r = await window.storage.get(ARCH_DATA_PREFIX + a.id + ':' + i);
+      if(!r || typeof r.value !== 'string') throw new Error('Archive data is incomplete.');
+      str += r.value.slice(2);
+    }
+    return JSON.parse(str);
+  }
+
+  function planStatusLabel(p){ return p.validated ? 'Done' : (p.stockCommitted ? 'Processing' : 'Hold'); }
 
   function buildArchiveWorkbook(snapshot){
     const wb = XLSX.utils.book_new();
     const d = snapshot.data;
+    const add = (rows, note, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{Note:note}]), name);
 
-    const recipeRows = (d.recipes||[]).flatMap(r => (r.ingredients||[]).map(ing => ({
+    add((d.recipes||[]).flatMap(r => (r.ingredients||[]).map(ing => ({
       'Recipe': r.name, 'Category': r.category, 'Yield (pax)': r.yieldVal,
       'Cost/Pax': r.costPerPax, 'Recipe Total': r.totalCost,
       'Ingredient': ing.name, 'Qty': ing.qty, 'UOM': ing.uom,
       'Unit Price': ing.unitPrice, 'Line Cost': ing.lineCost
-    })));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(recipeRows.length ? recipeRows : [{Note:'No recipes saved'}]), 'Recipe Cards');
+    }))), 'No recipes saved', 'Recipe Cards');
 
-    const planRows = (d.plans||[]).map(p => ({
-      'Batch #': p.batchNumber, 'Event': p.eventName, 'Recipe': p.recipeName,
-      'Category': p.category, 'Pax': p.pax, 'Batches': p.batches,
-      'Batch Date': p.batchDate, 'Start': p.startTime, 'End': p.endTime,
-      'Est. Cost': p.estCost, 'Status': p.validated ? 'Done' : (p.stockCommitted ? 'Processing' : 'Hold')
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(planRows.length ? planRows : [{Note:'No production plans saved'}]), 'Production Plans');
+    add((d.plans||[]).map(p => ({
+      'Batch #': p.batchNumber, 'Event': p.eventName, 'Event Date': p.eventDate||'',
+      'Recipe': p.recipeName, 'Category': p.category, 'Commi in charge': p.commi||'',
+      'Pax': p.pax, 'Batches': p.batches, 'Batch Date': p.batchDate,
+      'Start': p.startTime, 'End': p.endTime, 'Est. Cost': p.estCost,
+      'Status': planStatusLabel(p),
+      'Released': p.releasedAt ? String(p.releasedAt).slice(0,10) : '', 'Released By': p.releasedBy||'',
+      'Validated': p.validatedAt ? String(p.validatedAt).slice(0,10) : '',
+      'Cooked Pax': p.cookedPax||'', 'Dispatched': p.dispatchedAt||'',
+      'Meat Excess': (p.meatExcess||[]).map(m => m.name + ' ' + m.qty + ' ' + m.uom + ' (' + (m.mode==='staff'?'staff meal':'disposed') + ')').join('; ')
+    })), 'No production plans saved', 'Production Plans');
 
-    const pkgRows = (d.packages||[]).map(p => ({
+    add((d.packages||[]).map(p => ({
       'Package': p.name, 'SO#': p.soNumber||'', 'Pax': p.pax||'',
       'Food Charged': p.foodCharged, 'Service Total': p.serviceTotal||0,
-      'Misc Total': p.miscTotal, 'Grand Total': p.grandTotal
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pkgRows.length ? pkgRows : [{Note:'No packages saved'}]), 'Packages');
+      'Misc Total': p.miscTotal, 'Grand Total': p.grandTotal, 'Price per 1 pax': p.pricePerPax||0,
+      'Standard Package Price': p.standardPackagePrice||'', 'VAT %': p.vatRate!=null?p.vatRate:''
+    })), 'No packages saved', 'Packages');
 
-    const invRows = (d.inventory||[]).map(i => ({
-      'Ingredient': i.name, 'UOM': i.uom, 'Stock on hand': i.stock||0
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invRows.length ? invRows : [{Note:'No inventory tracked'}]), 'Inventory');
+    add((d.packages||[]).flatMap(p => [].concat(
+      (p.foodItems||[]).map(f => ({ 'Package': p.name, 'Section': 'Food', 'Item': f.description||f.recipeName||f.desc||'', 'Qty': '', 'Price': f.price||0, 'Charged (x3)': f.charged||0 })),
+      (p.serviceItems||[]).filter(x=>x.qty>0).map(x => ({ 'Package': p.name, 'Section': 'Service', 'Item': x.role, 'Qty': x.qty, 'Price': x.price||0, 'Charged (x3)': (x.qty||0)*(x.price||0) })),
+      (p.miscItems||[]).map(m => ({ 'Package': p.name, 'Section': 'Misc', 'Item': m.desc||m.description||'', 'Qty': '', 'Price': m.price||0, 'Charged (x3)': m.price||0 }))
+    )), 'No package line items', 'Package Details');
 
-    const histRows = (d.inventoryHistory||[]).map(h => ({
+    add((d.inventory||[]).map(i => ({ 'Ingredient': i.name, 'UOM': i.uom, 'Stock on hand': i.stock||0 })), 'No inventory tracked', 'Inventory');
+
+    add((d.inventoryHistory||[]).map(h => ({
       'Date': h.date, 'User': h.user, 'Item': h.item, 'UOM': h.uom,
       'Old Qty': h.oldQty!=null?h.oldQty:'', 'New Qty': h.newQty!=null?h.newQty:'',
       'Reason': h.reason||h.note||'', 'Out of Stock': h.outOfStock ? 'YES' : ''
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(histRows.length ? histRows : [{Note:'No stock history recorded'}]), 'Stock History');
-
+    })), 'No stock history recorded', 'Stock History');
     return wb;
   }
 
+  function archiveFileBase(snapshot){
+    const safe = (snapshot.label || 'archive').replace(/[^a-z0-9\- _]/gi,'').trim() || 'archive';
+    return 'Kitchen-Cost-Rail_' + safe;
+  }
   function exportArchiveToExcel(snapshot){
-    const wb = buildArchiveWorkbook(snapshot);
-    const safeLabel = (snapshot.label || 'archive').replace(/[^a-z0-9\- _]/gi,'').trim() || 'archive';
-    XLSX.writeFile(wb, 'Kitchen-Cost-Rail_' + safeLabel + '.xlsx');
+    XLSX.writeFile(buildArchiveWorkbook(snapshot), archiveFileBase(snapshot) + '.xlsx');
+  }
+
+  // ---------- Read-only viewer (opens in its own tab / downloadable page) ----------
+  function archivePackageDetailHtml(pkg){
+    const foodRows = (pkg.foodItems||[]).map(f => `<tr><td>${escapeHtml(f.description||f.recipeName||f.desc||'—')}</td><td class="num">${PHP(f.price||0)}</td></tr>`).join('');
+    const svcRows = (pkg.serviceItems||[]).filter(x=>x.qty>0).map(x => `<tr><td>${escapeHtml(x.role)}</td><td class="num">${x.qty} × ${PHP(x.price)}</td></tr>`).join('');
+    const miscRows = (pkg.miscItems||[]).map(m => `<tr><td>${escapeHtml(m.desc||m.description||'—')}</td><td class="num">${PHP(m.price||0)}</td></tr>`).join('');
+    const st = pkgPriceStructure(pkg);
+    return `
+      <p class="meta">${pkg.pax ? pkg.pax + ' pax · ' : ''}food ×3/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(pkg.serviceTotal||0)} · misc (flat): ${PHP(pkg.miscTotal)}</p>
+      <p class="lbl">Food items</p><table><tbody>${foodRows || '<tr><td>None</td></tr>'}</tbody></table>
+      <p class="lbl">Service roles</p><table><tbody>${svcRows || '<tr><td>None</td></tr>'}</tbody></table>
+      <p class="lbl">Miscellaneous</p><table><tbody>${miscRows || '<tr><td>None</td></tr>'}</tbody></table>
+      <p class="tot">Grand total: ${PHP(pkg.grandTotal)}</p>
+      <p class="tot">Price per 1 pax: ${PHP(pkg.pricePerPax || 0)}</p>
+      <div class="pkg-piechart"><p class="lbl">Cost breakdown</p>${buildPieChartHtml(pkgCostBreakdownSlices(pkg))}</div>
+      ${st ? `<div class="pkg-piechart"><p class="lbl">Price structure (% of ${PHP(st.packageCost)} standard package · VAT ${st.vatRate}%)</p>
+        ${buildPieChartHtml(st.slices, st.marginPct < 0 ? '⚠ Cost of Goods + VAT exceed the total package price' : null)}</div>` : ''}`;
+  }
+
+  function buildArchiveViewerHtml(snapshot){
+    const d = snapshot.data;
+    const recipesById = {};
+    (d.recipes||[]).forEach(r => recipesById[r.id] = r);
+    const plansSorted = [...(d.plans||[])].sort((x,y)=> ((x.batchDate||'')+(x.startTime||'')).localeCompare((y.batchDate||'')+(y.startTime||'')));
+
+    function prodCard(p){
+      const r = recipesById[p.recipeId];
+      const rows = r ? (r.ingredients||[]).map(ing => `<tr><td>${escapeHtml(ing.name)}</td><td class="num">${(ing.qty * p.batches).toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(ing.uom)}</td></tr>`).join('') : '';
+      const timing = (p.startTime ? formatTimeDisplay(p.startTime) : '—') + (p.endTime ? ' – ' + formatTimeDisplay(p.endTime) : '');
+      const tag = p.validated ? '<span class="st done">DONE</span>' : (p.stockCommitted ? '<span class="st go">GO</span>' : '<span class="st nogo">NO-GO</span>');
+      const cooked = p.validated ? `<div class="meta">Cooked food: ${p.cookedPax || p.pax} pax · ${p.dispatchedAt ? 'dispatched ' + formatDateDisplay(p.dispatchedAt) : 'not dispatched'}</div>` : '';
+      return `
+        <div class="card" data-cat="${escapeHtml(p.category||'Uncategorized')}">
+          <span class="batch">Batch #${escapeHtml(p.batchNumber||'—')}</span>${tag}<span class="cat">${escapeHtml(p.category||'Uncategorized')}</span>
+          <div class="rname">${escapeHtml(p.eventName)}</div>
+          <div class="meta">${escapeHtml(p.recipeName||'—')} · ${p.pax} pax · ${p.batches} batch${p.batches===1?'':'es'}<br>
+            commi: ${escapeHtml(p.commi||'—')}<br>batch date ${formatDateDisplay(p.batchDate)} · ${timing}</div>
+          ${cooked}
+          <div class="price">${PHP(p.estCost)} est. cost</div>
+          <details><summary>View details</summary>
+            <table><thead><tr><th>Ingredient</th><th class="num">Qty needed</th></tr></thead><tbody>${rows || '<tr><td colspan="2">Recipe not archived.</td></tr>'}</tbody></table>
+          </details>
+        </div>`;
+    }
+    const hold = plansSorted.filter(p => !p.validated && !p.stockCommitted);
+    const proc = plansSorted.filter(p => !p.validated && p.stockCommitted);
+    const done = plansSorted.filter(p => p.validated);
+    const col = (title, cls, list) => `<div class="col ${cls}"><div class="colhead"><h3>${title}</h3><span class="count">${list.length}</span></div>${list.length ? list.map(prodCard).join('') : '<div class="empty">Nothing here.</div>'}</div>`;
+    const cats = [...new Set(plansSorted.map(p => p.category || 'Uncategorized'))].sort();
+
+    const pkgHtml = (d.packages||[]).length ? (d.packages||[]).map(pkg => `
+        <div class="card pkgcard">
+          <div class="rname">${escapeHtml(pkg.name)} ${pkg.soNumber ? `<span class="batch">SO# ${escapeHtml(pkg.soNumber)}</span>` : ''}</div>
+          <div class="meta">${pkg.pax ? pkg.pax + ' pax · ' : ''}Grand total <b>${PHP(pkg.grandTotal)}</b> · ${PHP(pkg.pricePerPax||0)} per pax</div>
+          <details><summary>View package</summary>${archivePackageDetailHtml(pkg)}</details>
+        </div>`).join('') : '<div class="empty">No packages were saved in this archive.</div>';
+
+    const when = new Date(snapshot.createdAt).toLocaleString('en-PH',{month:'long',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archive — ${escapeHtml(snapshot.label)}</title>
+<style>
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+:root{--rust:#B14A2C;--herb:#5C7A5A;--gold:#B5892E;--steel:#6B6F66;}
+body{margin:0;background:#1B1E1A;color:#F4F1E8;font-family:Inter,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 22px 60px;}
+h1{font-size:28px;margin:0 0 4px;} .sub{color:#B7B4A8;font-size:13px;font-family:Consolas,monospace;}
+.badge{display:inline-block;background:#B14A2C;color:#fff;font-size:11px;padding:3px 9px;border-radius:999px;margin-left:8px;vertical-align:middle;letter-spacing:.04em;}
+.bar{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;border-bottom:1px solid #3a3d36;padding-bottom:16px;margin-bottom:18px;}
+button{font:inherit;cursor:pointer;} .pbtn{background:#fff;border:0;border-radius:4px;padding:8px 14px;font-weight:600;}
+.tabs{display:flex;gap:10px;margin-bottom:20px;} .tab{background:#232620;color:#E4E1D6;border:1px solid #3a3d36;border-radius:4px;padding:12px 22px;font-weight:600;}
+.tab.active{background:#fff;color:#1B1E1A;} .pane{display:none;} .pane.active{display:block;}
+select{padding:8px;border-radius:4px;margin:0 0 16px;}
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start;} @media(max-width:860px){.board{grid-template-columns:1fr;}}
+.col{background:#fff;color:#1B1E1A;border-radius:6px;padding:14px;}
+.colhead{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid;margin-bottom:12px;padding-bottom:8px;}
+.colhead h3{margin:0;font-size:13px;letter-spacing:.04em;} .count{background:#EDEAE0;border-radius:999px;padding:2px 9px;font-size:12px;}
+.col.hold .colhead{border-color:#B14A2C;color:#8A2E1A;} .col.proc .colhead{border-color:#5C7A5A;color:#3E5A3C;} .col.done .colhead{border-color:#6B6F66;color:#4B4E46;}
+.card{border:1px solid #D8D4C6;border-radius:5px;padding:12px;margin-bottom:10px;background:#FBFAF6;color:#1B1E1A;}
+.pkgcard{max-width:760px;margin-bottom:12px;}
+.batch{background:#1B1E1A;color:#fff;font-size:11px;padding:2px 7px;border-radius:3px;margin-right:6px;font-family:Consolas,monospace;}
+.st{font-size:10.5px;padding:2px 7px;border-radius:3px;margin-right:6px;font-family:Consolas,monospace;font-weight:700;}
+.st.nogo{background:#F4D9D2;color:#8A2E1A;} .st.go{background:#DDE8DA;color:#3E5A3C;} .st.done{background:#E6E3D8;color:#4B4E46;}
+.cat{background:#E1EADF;color:#3E5A3C;font-size:11px;padding:2px 7px;border-radius:3px;}
+.rname{font-weight:700;font-size:16px;margin:8px 0 4px;} .meta{font-size:12px;color:#5b5e55;line-height:1.55;font-family:Consolas,monospace;}
+.price{font-weight:700;margin-top:8px;color:#3E5A3C;font-family:Consolas,monospace;}
+details{margin-top:10px;} summary{cursor:pointer;font-weight:600;font-size:13px;color:#2F5D7C;}
+table{width:100%;border-collapse:collapse;margin:6px 0;font-size:12.5px;} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #E4E0D2;} th{font-size:10.5px;color:#6B6F66;text-transform:uppercase;}
+td.num,th.num{text-align:right;white-space:nowrap;}
+.lbl{font-weight:700;margin:12px 0 4px;font-size:12.5px;} .tot{font-weight:700;margin:6px 0;}
+.empty{color:#6B6F66;font-size:13px;padding:14px;text-align:center;font-family:Consolas,monospace;}
+.pkg-piechart{border-top:1px solid #D8D4C6;padding-top:10px;margin-top:14px;}
+.piechart-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;} .piechart-legend{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;}
+.legend-item{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;} .legend-label{display:flex;align-items:center;gap:7px;color:#4B4E46;}
+.legend-swatch{width:9px;height:9px;border-radius:2px;display:inline-block;} .legend-value{font-family:Consolas,monospace;white-space:nowrap;}
+.legend-warning{font-size:11px;color:#B14A2C;margin-top:6px;}
+@media print{body{background:#fff;color:#000;} .tabs,.pbtn,select{display:none;} .pane{display:block !important;} details{display:block;} details>*{display:block;}}
+</style></head><body><div class="wrap">
+<div class="bar"><div><h1>Kitchen Cost Rail — Archive<span class="badge">READ-ONLY</span></h1>
+<div class="sub">${escapeHtml(snapshot.label)} · saved ${escapeHtml(when)} · by ${escapeHtml(snapshot.createdBy||'—')}</div></div>
+<button class="pbtn" onclick="window.print()">🖨 Print</button></div>
+<div class="tabs"><button class="tab active" data-t="prod">Production Planning</button><button class="tab" data-t="pkg">Package Cost Calculator</button></div>
+<section class="pane active" id="prod">
+  <select id="catFilter"><option value="">All categories</option>${cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('')}</select>
+  <div class="board">${col('HOLD (NO-GO)','hold',hold)}${col('PROCESSING (GO)','proc',proc)}${col('DONE','done',done)}</div>
+</section>
+<section class="pane" id="pkg">${pkgHtml}</section>
+</div>
+<script>
+document.querySelectorAll('.tab').forEach(function(b){b.onclick=function(){
+  document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active')});
+  document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('active')});
+  b.classList.add('active'); document.getElementById(b.dataset.t).classList.add('active');};});
+document.getElementById('catFilter').onchange=function(e){var v=e.target.value;
+  document.querySelectorAll('#prod .card').forEach(function(c){c.style.display=(!v||c.dataset.cat===v)?'':'none';});};
+<\/script></body></html>`;
+  }
+
+  function openArchiveViewer(snapshot){
+    const w = window.open('', '_blank');
+    if(!w){ alert('Please allow pop-ups for this site to open the archive viewer.'); return; }
+    w.document.open(); w.document.write(buildArchiveViewerHtml(snapshot)); w.document.close();
+  }
+  function downloadArchiveViewer(snapshot){
+    const blob = new Blob([buildArchiveViewerHtml(snapshot)], { type:'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = archiveFileBase(snapshot) + '_Viewer.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
   }
 
   function renderMasterArchiveList(){
@@ -6087,43 +6276,120 @@ function initApp(){
       return;
     }
     list.innerHTML = masterArchives.map(a => `
-      <div class="archive-row" data-id="${a.id}">
+      <div class="archive-row" data-id="${a.id}" style="flex-wrap:wrap;gap:8px;">
         <div>
           <span class="arch-label">${escapeHtml(a.label)}</span>
-          <span class="arch-meta">${escapeHtml(new Date(a.createdAt).toLocaleString('en-PH',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}))} · by ${escapeHtml(a.createdBy||'—')}</span>
+          <span class="arch-meta">${escapeHtml(new Date(a.createdAt).toLocaleString('en-PH',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}))} · by ${escapeHtml(a.createdBy||'—')}${a.counts ? ' · ' + a.counts.plans + ' batches, ' + a.counts.packages + ' packages' : ''}</span>
         </div>
-        <button type="button" data-action="download-archive">⬇ Download .xlsx</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" data-action="view-archive">👁 View</button>
+          <button type="button" data-action="download-archive">⬇ Excel</button>
+          <button type="button" data-action="download-viewer">⬇ Viewer page</button>
+        </div>
       </div>
     `).join('');
-    list.querySelectorAll('[data-action="download-archive"]').forEach(btn=>{
-      btn.addEventListener('click', (e)=>{
+    list.querySelectorAll('[data-action]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
         const id = e.target.closest('.archive-row').dataset.id;
-        const snap = masterArchives.find(a => a.id === id);
-        if(snap) exportArchiveToExcel(snap);
+        const meta = masterArchives.find(a => a.id === id);
+        if(!meta) return;
+        const action = btn.dataset.action;
+        const label = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Loading…';
+        try{
+          const snap = Object.assign({}, meta, { data: await loadArchiveData(meta) });
+          if(action === 'view-archive') openArchiveViewer(snap);
+          else if(action === 'download-archive') exportArchiveToExcel(snap);
+          else downloadArchiveViewer(snap);
+        }catch(err){
+          window.alert('Could not load this archive: ' + err.message);
+        }finally{
+          btn.disabled = false; btn.textContent = label;
+        }
       });
     });
   }
 
+  // Wrap-up reset. Calendar data is never touched — production dates for
+  // batches that are about to be removed are frozen into the calendar first.
+  async function resetAfterArchive(opts){
+    if(opts.prod){
+      await loadCalendarEvents();
+      const keep = opts.keepActive ? plans.filter(p => !p.validated || !p.dispatchedAt) : [];
+      const keepIds = new Set(keep.map(p => p.id));
+      plans.filter(p => !keepIds.has(p.id) && p.released && p.batchDate).forEach(p=>{
+        calEvents.push({
+          id: 'pf-' + p.id, date: p.batchDate, isProd: true, isTasting: false,
+          venue: 'Batch #' + (p.batchNumber || '—') + ' · ' + p.recipeName,
+          person: p.commi || '',
+          note: (p.eventName || '') + ' · ' + p.pax + ' pax · ' + (p.category || '')
+        });
+      });
+      await persistCalendarEvents();
+      plans = keep;
+      await persistPlans();
+      await syncProductionCommitments();
+    }
+    if(opts.pkgs){
+      packages = [];
+      await persistPackages();
+    }
+    renderProductionList();
+    renderInventoryTable();
+    renderDispatch();
+    renderCalendar();
+    if(typeof renderPackageList === 'function') renderPackageList();
+    if(typeof updatePackageSummary === 'function') updatePackageSummary();
+  }
+
   async function createMasterArchive(){
+    const msgEl = document.getElementById('archiveMsg');
+    const btn = document.getElementById('createArchiveBtn');
     const defaultLabel = new Date().toLocaleString('en-US',{month:'long', year:'numeric'});
-    const label = window.prompt('Label this archive (e.g. month being closed out):', defaultLabel) || defaultLabel;
-    const snapshot = {
-      id: 'arch-' + Date.now(),
-      label: label,
-      createdAt: new Date().toISOString(),
-      createdBy: currentUser || 'Unnamed user',
-      data: {
-        recipes: recipes,
-        plans: plans,
-        packages: packages,
-        inventory: inventory,
-        inventoryHistory: inventoryHistory
+    const label = document.getElementById('archiveLabelInput').value.trim() || defaultLabel;
+    const resetProd = document.getElementById('archiveResetProd').checked;
+    const keepActive = document.getElementById('archiveKeepActive').checked;
+    const resetPkg = document.getElementById('archiveResetPkg').checked;
+    msgEl.className = 'form-msg'; msgEl.textContent = '';
+
+    if(resetProd || resetPkg){
+      const what = [resetProd ? (keepActive ? 'finished & dispatched production batches' : 'ALL production planning data') : '',
+                    resetPkg ? 'all saved packages' : ''].filter(Boolean).join(' and ');
+      if(!window.confirm('After the archive is saved and downloaded, ' + what + ' will be cleared for the new month.\\n\\nThe archive stays available under Previous archives. The Calendar is not affected.\\n\\nContinue?')) return;
+    }
+
+    btn.disabled = true; const btnLabel = btn.textContent; btn.textContent = 'Saving archive…';
+    try{
+      const data = JSON.parse(JSON.stringify({
+        recipes: recipes, plans: plans, packages: packages,
+        inventory: inventory, inventoryHistory: inventoryHistory
+      }));
+      const id = 'arch-' + Date.now();
+      let chunks;
+      try{
+        chunks = await saveArchiveData(id, data);
+        masterArchives.unshift({
+          id, label, createdAt: new Date().toISOString(), createdBy: currentUser || 'Unnamed user',
+          chunks, counts: { plans: data.plans.length, packages: data.packages.length },
+          resetApplied: { production: resetProd, packages: resetPkg }
+        });
+        await persistMasterArchives();
+      }catch(e){
+        msgEl.textContent = 'Could not save the archive to the shared sheet, so nothing was reset. Check your connection and try again.';
+        msgEl.className = 'form-msg err';
+        return;
       }
-    };
-    masterArchives.unshift(snapshot);
-    await persistMasterArchives();
-    exportArchiveToExcel(snapshot);
-    renderMasterArchiveList();
+      const snap = Object.assign({}, masterArchives[0], { data });
+      exportArchiveToExcel(snap);
+      if(resetProd || resetPkg) await resetAfterArchive({ prod: resetProd, keepActive, pkgs: resetPkg });
+      msgEl.textContent = '✓ Archive saved and downloaded' + ((resetProd || resetPkg) ? ' — the selected data has been reset for the new month.' : '.');
+      msgEl.className = 'form-msg ok';
+      document.getElementById('archiveResetProd').checked = false;
+      document.getElementById('archiveResetPkg').checked = false;
+      renderMasterArchiveList();
+    } finally {
+      btn.disabled = false; btn.textContent = btnLabel;
+    }
   }
 
   const masterArchiveOverlayEl = document.getElementById('masterArchiveOverlay');
@@ -6131,6 +6397,8 @@ function initApp(){
     if(!canManageAccess()) return;
     await loadMasterArchives();
     renderMasterArchiveList();
+    document.getElementById('archiveLabelInput').value = new Date().toLocaleString('en-US',{month:'long', year:'numeric'});
+    document.getElementById('archiveMsg').textContent = '';
     masterArchiveOverlayEl.style.display = 'flex';
   });
   document.getElementById('closeMasterArchiveBtn').addEventListener('click', ()=>{
