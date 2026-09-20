@@ -235,6 +235,28 @@
   }
   .row-remove:hover{color:var(--rust-dark);}
 
+  /* ---------- Ingredient suggestion dropdown (Recipe Card) ---------- */
+  .ing-name-wrap{position:relative;}
+  .ing-suggest-list{
+    position:absolute; top:100%; left:0; right:0; z-index:40;
+    background:var(--surface); border:1px solid var(--line); border-radius:3px;
+    box-shadow:0 6px 16px rgba(0,0,0,0.18); max-height:190px; overflow-y:auto;
+    margin-top:2px;
+  }
+  .ing-suggest-item{
+    padding:7px 10px; font-size:13px; cursor:pointer; color:var(--ink);
+    display:flex; justify-content:space-between; gap:8px;
+  }
+  .ing-suggest-item:hover{background:var(--surface-alt);}
+  .ing-suggest-item .sugg-meta{color:var(--steel); font-size:11px; white-space:nowrap;}
+  .ing-suggest-empty{padding:7px 10px; font-size:11.5px; color:var(--steel); font-style:italic;}
+  .ing-status-note{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; margin-top:3px; min-height:12px;
+  }
+  .ing-status-note.found{color:var(--herb-dark);}
+  .ing-status-note.notfound{color:var(--danger);}
+  .f-price[readonly]{background:var(--surface-alt); color:var(--ink-soft); cursor:not-allowed;}
+
   .add-ingredient-btn{
     margin-top:12px;
     background:var(--surface-alt);
@@ -1152,6 +1174,11 @@
   .stockout-row .so-name{font-weight:600;color:var(--ink);}
   .stockout-row .so-meta{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--steel);}
   .stockout-row .so-cost{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--danger);white-space:nowrap;}
+  .stockout-row .so-batches{display:block;margin-top:2px;color:var(--rust-dark);}
+  .stockout-card-head{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; flex-wrap:wrap; margin-bottom:10px;
+  }
 
   .inv-availability{
     display:flex;
@@ -1518,6 +1545,35 @@
     }
     .svc-role-label{grid-area:role;}
   }
+  /* ---------- Calendar module ---------- */
+  .cal-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;}
+  .cal-month-switch{display:flex;align-items:center;gap:10px;}
+  .cal-month-label{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;min-width:190px;}
+  .cal-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--steel);align-items:center;}
+  .cal-legend span{display:flex;align-items:center;gap:6px;}
+  .cal-swatch{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .cal-swatch.tasting{background:#E3B505;}
+  .cal-swatch.event{background:#2E6FB7;}
+  .cal-swatch.prod{background:#B14A2C;}
+  .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px;}
+  .cal-weekdays div{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--steel);text-align:center;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-cell{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-height:104px;
+    padding:7px 8px;display:flex;flex-direction:column;gap:5px;}
+  .cal-cell.out{opacity:.42;}
+  .cal-cell.today{border-color:var(--herb);box-shadow:inset 0 0 0 1px var(--herb);}
+  .cal-daynum{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--steel);}
+  .cal-chip{border-radius:4px;padding:4px 6px;font-size:11px;line-height:1.3;cursor:pointer;
+    color:#fff;overflow:hidden;text-overflow:ellipsis;}
+  .cal-chip.tasting{background:#E3B505;color:#3A2E00;}
+  .cal-chip.event{background:#2E6FB7;}
+  .cal-chip.prod{background:#B14A2C;}
+  .cal-addbtn{margin-top:auto;background:none;border:1px dashed var(--line);border-radius:4px;
+    font-size:10.5px;color:var(--steel);padding:3px 0;cursor:pointer;}
+  .cal-due{background:#FBF3D9;border:1px solid #E3B505;border-radius:6px;padding:10px 14px;
+    font-size:12.5px;margin-bottom:14px;line-height:1.5;}
+  @media (max-width:760px){ .cal-cell{min-height:78px;} }
 </style>
 </head>
 <body>
@@ -1534,7 +1590,7 @@
       <input type="text" id="loginUsername" placeholder="admin / chef1 / chef2 — leave blank to view only" autocomplete="username">
       <label for="loginPassword" style="margin-top:8px;display:block;">Password</label>
       <input type="password" id="loginPassword" placeholder="Leave blank to continue as Viewer" autocomplete="current-password">
-      <p class="role-desc" id="roleDesc">No login? You'll enter as Level 3 — Viewer (read-only).</p>
+      <p class="role-desc" id="roleDesc">No login? You'll enter as Level 4 — Viewer (read-only).</p>
       <button type="button" class="access-link" id="showAccessTableBtn">What can each level do?</button>
     </div>
 
@@ -1552,19 +1608,20 @@
 <div class="access-modal-overlay" id="accessModalOverlay">
   <div class="access-modal">
     <h2>Access levels</h2>
-    <p>Three fixed accounts control who can view, create, edit, delete, or manage access in this dashboard. Everyone else who opens the link without logging in gets read-only Viewer access.</p>
+    <p>Four fixed accounts control who can view, create, edit, delete, release/validate, or manage access in this dashboard. Everyone else who opens the link without logging in gets read-only Viewer access.</p>
     <table class="access-table">
       <thead>
-        <tr><th>Action</th><th>Admin<br><span style="font-weight:400;">(admin)</span></th><th>Manager<br><span style="font-weight:400;">(chef1 / chef2)</span></th><th>Viewer<br><span style="font-weight:400;">(everyone else)</span></th></tr>
+        <tr><th>Action</th><th>Admin<br><span style="font-weight:400;">(admin)</span></th><th>Manager<br><span style="font-weight:400;">(chef1)</span></th><th>Assistant<br><span style="font-weight:400;">(chef2)</span></th><th>Viewer<br><span style="font-weight:400;">(everyone else)</span></th></tr>
       </thead>
       <tbody>
-        <tr><td>View all tabs &amp; reports, and view saved recipe/plan/package details</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
-        <tr><td>Create recipe cards / production plans / packages</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
-        <tr><td>Edit / update existing entries</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
-        <tr><td>Update inventory stock on hand</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
-        <tr><td>Validate / mark production Done</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
-        <tr><td>Delete recipe cards, plans, or packages</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td></tr>
-        <tr><td>Run Master Archive export &amp; manage user access</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>View all tabs &amp; reports, and view saved recipe/plan/package details</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Print any view</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Create recipe cards / production plans / packages</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Edit / update existing entries</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Update inventory stock on hand</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Release / validate production (mark Done)</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td></tr>
+        <tr><td>Delete recipe cards, plans, or packages</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Run Master Archive export &amp; manage user access</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
       </tbody>
     </table>
     <button type="button" class="print-btn" id="closeAccessTableBtn">Close</button>
@@ -1574,7 +1631,7 @@
 <div class="access-modal-overlay" id="manageAccessOverlay">
   <div class="access-modal">
     <h2>Manage user access</h2>
-    <p>Admin, Chef 1, and Chef 2 are fixed accounts. You can enable or disable the two manager accounts here — anyone signing in with a disabled account will fall back to Viewer. Usernames and passwords cannot be changed from this screen.</p>
+    <p>Admin, Chef 1 (Manager), and Chef 2 (Assistant) are fixed accounts. You can enable or disable the Chef 1 and Chef 2 accounts here — anyone signing in with a disabled account will fall back to Viewer. Usernames and passwords cannot be changed from this screen.</p>
     <div id="accessAccountsList"></div>
     <button type="button" class="print-btn" id="closeManageAccessBtn" style="margin-top:14px;">Close</button>
   </div>
@@ -1596,6 +1653,48 @@
     <h2 id="viewDetailTitle">Details</h2>
     <div id="viewDetailBody"></div>
     <button type="button" class="print-btn" id="closeViewDetailBtn" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<div class="access-modal-overlay" id="insertIngredientOverlay">
+  <div class="access-modal">
+    <h2>Insert ingredient</h2>
+    <p>Add a brand-new ingredient straight into Inventory Status — it won't come from a recipe card. It's added with 0 stock on hand, so it will show under "No stock" until you set a quantity.</p>
+    <div class="field-row" style="grid-template-columns:1.6fr 0.8fr 0.9fr;margin-top:14px;">
+      <div>
+        <label for="newIngName">Ingredient</label>
+        <input type="text" id="newIngName" placeholder="e.g. Bay leaf">
+      </div>
+      <div>
+        <label for="newIngUom">UOM</label>
+        <select id="newIngUom"></select>
+      </div>
+      <div>
+        <label for="newIngPrice">Unit price ₱</label>
+        <input type="number" id="newIngPrice" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
+        <input type="checkbox" id="newIngRawMeat" style="width:auto;margin:0;"> Raw meat (excess is collected at validation)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
+        <input type="checkbox" id="newIngRecycleMeat" style="width:auto;margin:0;"> Recycled raw meat (destination for returned excess)
+      </label>
+    </div>
+    <div class="form-msg" id="newIngFormMsg"></div>
+    <button type="button" class="save-btn" id="saveNewIngBtn" style="margin-top:14px;">Add to inventory</button>
+    <button type="button" class="print-btn" id="closeInsertIngredientBtn" style="margin-top:10px;">Close</button>
+  </div>
+</div>
+
+<div class="access-modal-overlay" id="prodActionOverlay">
+  <div class="access-modal" style="max-width:640px;">
+    <h2 id="prodActionTitle">Release ingredients</h2>
+    <div id="prodActionBody"></div>
+    <div class="form-msg" id="prodActionMsg"></div>
+    <button type="button" class="save-btn" id="prodActionConfirmBtn" style="margin-top:14px;">Proceed</button>
+    <button type="button" class="print-btn" id="prodActionCancelBtn" style="margin-top:10px;">Cancel</button>
   </div>
 </div>
 
@@ -1630,6 +1729,8 @@
     <button class="tab-btn" data-tab="production"><span class="clip"></span>Production Planning</button>
     <button class="tab-btn" data-tab="packages"><span class="clip"></span>Package Cost Calculator</button>
     <button class="tab-btn" data-tab="inventory"><span class="clip"></span>Inventory Status</button>
+    <button class="tab-btn" data-tab="dispatch"><span class="clip"></span>Dispatching</button>
+    <button class="tab-btn" data-tab="calendar"><span class="clip"></span>Calendar</button>
   </div>
 
   <!-- ===================== TAB 1 ===================== -->
@@ -1660,6 +1761,7 @@
                 <option value="Dessert">Dessert</option>
                 <option value="Beverage">Beverage</option>
                 <option value="Sauce">Sauce</option>
+                <option value="Staff Meal">Staff Meal</option>
               </select>
             </div>
           </div>
@@ -1764,7 +1866,10 @@
     </div>
 
     <div class="stockout-card" id="stockoutCard" style="display:none;">
-      <p class="section-label" style="margin-bottom:10px;">INGREDIENTS TO REPLENISH — needed by active production plans, short of stock on hand</p>
+      <div class="stockout-card-head">
+        <p class="section-label" style="margin-bottom:0;">INGREDIENTS TO REPLENISH — needed by active production plans, short of stock on hand</p>
+        <button class="print-btn" id="printReplenishBtn" type="button">🖨 Print shopping list</button>
+      </div>
       <div id="stockoutList"></div>
     </div>
 
@@ -1806,6 +1911,17 @@
               <input type="number" id="prodPax" min="1" step="1" placeholder="e.g. 150">
             </div>
           </div>
+
+          <div class="field-row">
+            <div>
+              <label for="prodCommi">Commi in charge</label>
+              <input type="text" id="prodCommi" placeholder="e.g. Commi 2 — Aldrin P.">
+            </div>
+            <div>
+              <label for="prodEventPlace">Event place</label>
+              <input type="text" id="prodEventPlace" placeholder="e.g. Tagaytay Highlands">
+            </div>
+          </div>
           <p class="recipe-hint" id="recipeHint"></p>
 
           <p class="section-label" style="margin-top:20px;">BATCH SCHEDULE</p>
@@ -1822,6 +1938,8 @@
                 <option value="Dessert Production">Dessert Production</option>
                 <option value="Bread Production">Bread Production</option>
                 <option value="Sauce Production">Sauce Production</option>
+                <option value="Vegetables Production">Vegetables Production</option>
+                <option value="Staff Meal Production">Staff Meal Production</option>
               </select>
             </div>
           </div>
@@ -1883,6 +2001,77 @@
       <div class="kanban-board" id="productionBoard"></div>
     </div>
   </section>
+
+  <!-- ===================== TAB: DISPATCHING (COOKED FOOD INVENTORY) ===================== -->
+  <section class="panel" id="panel-dispatch">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <p class="section-label" style="color:#9C9F92;margin-bottom:0;">COOKED FOOD INVENTORY — DISPATCHING</p>
+      <button class="print-btn" id="printDispatchBtn" type="button">🖨 Print dispatch board</button>
+    </div>
+    <p class="recipe-hint" style="margin-top:8px;">
+      Every production batch moved to Done lands here as cooked food, counted in pax.
+    </p>
+    <div id="dispatchFolders" style="margin-top:18px;"></div>
+
+    <div style="margin-top:34px;">
+      <p class="section-label" style="color:#9C9F92;">COOKED FOOD IN / OUT SUMMARY</p>
+      <div class="stockout-card" style="display:block;">
+        <p style="margin:0 0 10px;font-size:12.5px;line-height:1.55;">
+          <b>Note:</b> this is strictly on a <b>pax basis, not a kg basis</b> of food. Make sure the production
+          made is equivalent to that specific pax — this is what holds the number of foods taken to the events
+          accountable.
+        </p>
+      </div>
+      <div id="dispatchSummary" style="margin-top:12px;"></div>
+    </div>
+
+    <div style="margin-top:34px;">
+      <p class="section-label" style="color:#9C9F92;">COMMI HEAD ASSIGNED BATCHES</p>
+      <div id="commiSummary"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: CALENDAR ===================== -->
+  <section class="panel" id="panel-calendar">
+    <div id="calDueBox" class="cal-due" style="display:none;"></div>
+    <div class="cal-toolbar">
+      <div class="cal-month-switch">
+        <button class="print-btn" type="button" id="calPrevBtn">‹</button>
+        <div class="cal-month-label" id="calMonthLabel"></div>
+        <button class="print-btn" type="button" id="calNextBtn">›</button>
+      </div>
+      <div class="cal-legend">
+        <span><span class="cal-swatch tasting"></span>Food tasting</span>
+        <span><span class="cal-swatch event"></span>Event</span>
+        <span><span class="cal-swatch prod"></span>Production schedule</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="print-btn" type="button" id="calPrintBtn">🖨 Print calendar</button>
+        <button class="save-btn" type="button" id="calNewBtn" style="margin:0;width:auto;padding:9px 16px;">+ New entry</button>
+      </div>
+    </div>
+    <div class="cal-weekdays">
+      <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <p class="recipe-hint" style="margin-top:14px;">
+      Production schedule dates appear automatically in red the moment a batch is released and proceeded
+      in Production Planning. Food tasting and event entries are saved to the shared Google Sheet database.
+    </p>
+  </section>
+
+  <div class="access-modal-overlay" id="calOverlay">
+    <div class="access-modal" style="max-width:520px;">
+      <h2 id="calModalTitle">Add entry</h2>
+      <div id="calModalBody"></div>
+      <div class="form-msg" id="calFormMsg"></div>
+      <div id="calModalButtons" style="margin-top:14px;">
+        <button type="button" class="save-btn" id="calSaveBtn">Save</button>
+        <button type="button" class="print-btn" id="calDeleteBtn" style="margin-top:10px;display:none;">Delete</button>
+        <button type="button" class="print-btn" id="calCloseBtn" style="margin-top:10px;">Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===================== TAB: PACKAGE COST CALCULATOR ===================== -->
   <section class="panel" id="panel-packages">
@@ -2030,11 +2219,14 @@
       </div>
     </div>
     <p class="section-label" style="color:#9C9F92;margin-bottom:14px;">
-      Set current stock on hand for each ingredient. Stock is reserved automatically once used in a production plan, so a new plan won't double-book the same stock. Production plans check against remaining availability to show GO / NO-GO status.
+      Set current stock on hand for each ingredient. Stock is reserved automatically once used in a production plan, so a new plan won't double-book the same stock. Production plans check against remaining availability to show GO / NO-GO status. Editing an ingredient's price here updates that same price everywhere it's used — recipe cards, procurement, and package costing — so computations always match one source of truth.
     </p>
-    <div class="search-bar wide">
-      <span class="search-icon">🔍</span>
-      <input type="text" id="invSearchInput" placeholder="Search ingredients (filters both No Stock and In Stock)…">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+      <div class="search-bar wide" style="margin-bottom:0;flex:1;min-width:220px;">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="invSearchInput" placeholder="Search ingredients (filters both No Stock and In Stock)…">
+      </div>
+      <button type="button" class="save-btn" id="openInsertIngredientBtn" style="width:auto;padding:10px 18px;">+ Insert ingredient</button>
     </div>
     <div id="inventoryTableWrap"></div>
 
@@ -2452,14 +2644,48 @@ function initApp(){
     return item ? (item.stock || 0) : 0;
   }
 
-  // A representative unit price for an ingredient, taken from the most recent
-  // recipe that uses it — used to estimate replenishment cost.
+  // The single price for an ingredient — read from Inventory Status first,
+  // since that's now the one price that's edited in one place and reflected
+  // everywhere (recipe cards, procurement, package costing). Falls back to
+  // the most recent recipe that used it, for ingredients whose inventory
+  // price hasn't been set yet.
   function getIngredientUnitPrice(name, uom){
+    const invItem = inventory.find(i => i.key === ingredientKey(name, uom));
+    if(invItem && invItem.price) return invItem.price;
     let price = 0;
     recipes.forEach(r => (r.ingredients || []).forEach(ing => {
       if(ingredientKey(ing.name, ing.uom) === ingredientKey(name, uom)) price = ing.unitPrice;
     }));
     return price;
+  }
+
+  // Editing an ingredient's price in Inventory Status is meant to be the one
+  // place that price lives — so pushing a new price here recomputes every
+  // saved recipe that uses this ingredient (line cost, recipe total, and
+  // cost per pax), instead of leaving those recipes holding a stale snapshot.
+  // Packages already lock in a recipe's cost/pax at the moment they're saved
+  // or edited, same as before — this only keeps recipes themselves in sync.
+  async function propagateIngredientPriceChange(name, uom, newPrice){
+    const key = ingredientKey(name, uom);
+    let touched = false;
+    recipes.forEach(r=>{
+      let recipeChanged = false;
+      (r.ingredients || []).forEach(ing=>{
+        if(ingredientKey(ing.name, ing.uom) === key && ing.unitPrice !== newPrice){
+          ing.unitPrice = newPrice;
+          ing.lineCost = (ing.qty || 0) * newPrice;
+          recipeChanged = true;
+        }
+      });
+      if(recipeChanged){
+        r.totalCost = (r.ingredients || []).reduce((s,i)=>s+(i.lineCost||0), 0);
+        r.costPerPax = r.yieldVal > 0 ? r.totalCost / r.yieldVal : 0;
+        touched = true;
+      }
+    });
+    // persistRecipes() already cascades into every recipe-dependent view
+    // (recipe list, CCP board, procurement, package builder summary).
+    if(touched) await persistRecipes();
   }
 
   // ---------- Production stock commitments ----------
@@ -2558,6 +2784,9 @@ function initApp(){
   // stock, if there's currently enough. Returns true if it committed.
   function tryCommitPlan(plan){
     if(plan.validated || plan.stockCommitted) return true;
+    // REVISED: ingredients now leave stock ONLY when the batch has been
+    // physically released and the user clicked Proceed — never automatically.
+    if(!plan.released) return false;
     const recipe = recipes.find(r => r.id === plan.recipeId);
     if(!recipe) return false;
     const { status } = computeAvailability(recipe, plan.batches, plan.id);
@@ -2595,16 +2824,19 @@ function initApp(){
   // Aggregate replenishment need across all Hold (uncommitted, unvalidated)
   // production plans, compared against raw stock on hand — used to budget
   // procurement. Committed plans already have their stock, so they're excluded.
+  // Also tracks which batch(es) — batch number + date needed — are driving
+  // the need for each ingredient, per the Ingredients Procurement revision.
   function computeStockoutSummary(){
-    const need = {}; // key -> { name, uom, required }
+    const need = {}; // key -> { name, uom, required, batches: [{batchNumber, batchDate, eventName}] }
     plans.forEach(p=>{
       if(p.validated || p.stockCommitted) return;
       const recipe = recipes.find(r => r.id === p.recipeId);
       if(!recipe) return;
       (recipe.ingredients || []).forEach(ing=>{
         const key = ingredientKey(ing.name, ing.uom);
-        if(!need[key]) need[key] = { name: ing.name, uom: ing.uom, required: 0 };
+        if(!need[key]) need[key] = { name: ing.name, uom: ing.uom, required: 0, batches: [] };
         need[key].required += ing.qty * p.batches;
+        need[key].batches.push({ batchNumber: p.batchNumber || '—', batchDate: p.batchDate || '', eventName: p.eventName || '' });
       });
     });
     const items = [];
@@ -2617,7 +2849,9 @@ function initApp(){
         const unitPrice = getIngredientUnitPrice(n.name, n.uom);
         const cost = shortage * unitPrice;
         totalCost += cost;
-        items.push({ name: n.name, uom: n.uom, required: n.required, onHand, shortage, unitPrice, cost });
+        // Earliest date needed first, so the most urgent batch shows first.
+        const sortedBatches = [...n.batches].sort((a,b) => (a.batchDate||'').localeCompare(b.batchDate||''));
+        items.push({ name: n.name, uom: n.uom, required: n.required, onHand, shortage, unitPrice, cost, batches: sortedBatches });
       }
     });
     items.sort((a,b)=>b.cost - a.cost);
@@ -2688,10 +2922,14 @@ function initApp(){
       return `
         <div class="kanban-card" data-key="${escapeHtml(item.key)}">
           <div class="rname">${escapeHtml(item.name)}</div>
-          <div class="rmeta">${escapeHtml(item.uom)}</div>
+          <div class="rmeta">${escapeHtml(item.uom)}${item.rawMeat ? ' · <b>RAW MEAT</b>' : ''}${item.recycleMeat ? ' · <b>RECYCLED MEAT</b>' : ''}</div>
           <div class="inv-stock-row">
             <label>Stock on hand</label>
             <input type="number" class="stock-input" min="0" step="0.01" value="${item.stock || 0}" ${canEdit() ? '' : 'disabled title="Your access level does not allow editing stock."'}>
+          </div>
+          <div class="inv-stock-row">
+            <label>Unit price ₱ <span style="font-weight:400;color:var(--steel);">(for Recipe Card auto-fill)</span></label>
+            <input type="number" class="price-input" min="0" step="0.01" value="${item.price || 0}" ${canEdit() ? '' : 'disabled title="Your access level does not allow editing price."'}>
           </div>
           ${availabilityHtml}
           ${linkedHtml}
@@ -2743,13 +2981,93 @@ function initApp(){
         await syncProductionCommitments();
         renderInventoryTable();
         renderProductionList();
-        updateRunEstimate();
+      });
+    });
+
+    wrap.querySelectorAll('.price-input').forEach(input=>{
+      input.addEventListener('change', async (e)=>{
+        const key = e.target.closest('.kanban-card').dataset.key;
+        const item = inventory.find(i => i.key === key);
+        if(!item) return;
+        const newPrice = parseFloat(e.target.value) || 0;
+        if(newPrice === (item.price || 0)) return;
+        item.price = newPrice;
+        await persistInventory();
+        // One same price, circulating everywhere it's used — update every
+        // saved recipe that uses this ingredient so costing stays accurate.
+        await propagateIngredientPriceChange(item.name, item.uom, newPrice);
+        renderInventoryTable();
       });
     });
   }
 
   const invSearchInputEl = document.getElementById('invSearchInput');
   if(invSearchInputEl) invSearchInputEl.addEventListener('input', renderInventoryTable);
+
+  // ---------- Insert ingredient (manual add straight into Inventory Status) ----------
+  const insertIngredientOverlayEl = document.getElementById('insertIngredientOverlay');
+  const newIngNameEl = document.getElementById('newIngName');
+  const newIngUomEl = document.getElementById('newIngUom');
+  const newIngPriceEl = document.getElementById('newIngPrice');
+  const newIngFormMsgEl = document.getElementById('newIngFormMsg');
+  const saveNewIngBtnEl = document.getElementById('saveNewIngBtn');
+
+  function openInsertIngredientModal(){
+    if(!canEdit()) return;
+    newIngNameEl.value = '';
+    newIngUomEl.innerHTML = makeUomOptions('kg');
+    newIngPriceEl.value = '';
+    document.getElementById('newIngRawMeat').checked = false;
+    document.getElementById('newIngRecycleMeat').checked = false;
+    newIngFormMsgEl.textContent = '';
+    newIngFormMsgEl.className = 'form-msg';
+    insertIngredientOverlayEl.style.display = 'flex';
+    setTimeout(()=>newIngNameEl.focus(), 50);
+  }
+  function closeInsertIngredientModal(){
+    insertIngredientOverlayEl.style.display = 'none';
+  }
+  document.getElementById('openInsertIngredientBtn').addEventListener('click', openInsertIngredientModal);
+  document.getElementById('closeInsertIngredientBtn').addEventListener('click', closeInsertIngredientModal);
+
+  saveNewIngBtnEl.addEventListener('click', async ()=>{
+    if(saveNewIngBtnEl.disabled) return; // guard against duplicate clicks while saving
+    const name = newIngNameEl.value.trim();
+    const uom = newIngUomEl.value;
+    const price = parseFloat(newIngPriceEl.value) || 0;
+
+    newIngFormMsgEl.className = 'form-msg';
+    newIngFormMsgEl.textContent = '';
+
+    if(!name){
+      newIngFormMsgEl.textContent = 'Enter an ingredient name.';
+      newIngFormMsgEl.className = 'form-msg err';
+      return;
+    }
+    const key = ingredientKey(name, uom);
+    if(inventory.find(i => i.key === key)){
+      newIngFormMsgEl.textContent = '"' + name + '" (' + uom + ') is already in inventory — edit it directly in the list below instead.';
+      newIngFormMsgEl.className = 'form-msg err';
+      return;
+    }
+
+    saveNewIngBtnEl.disabled = true;
+    const _label = saveNewIngBtnEl.textContent;
+    saveNewIngBtnEl.textContent = 'Adding…';
+    try{
+      inventory.push({ key, name, uom, stock: 0, price,
+        rawMeat: !!document.getElementById('newIngRawMeat').checked,
+        recycleMeat: !!document.getElementById('newIngRecycleMeat').checked });
+      await withMinDelay(persistInventory(), 500);
+      logInventoryChange(name, uom, 0, 0, 'Manually added to inventory');
+      renderInventoryTable();
+      renderProcurement();
+      closeInsertIngredientModal();
+    } finally {
+      saveNewIngBtnEl.disabled = false;
+      saveNewIngBtnEl.textContent = _label;
+    }
+  });
 
   // ---------- Tabs ----------
   document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -2763,6 +3081,8 @@ function initApp(){
       if(btn.dataset.tab === 'production'){ refreshRecipeSelect(); syncProductionCommitments().then(renderProductionList); }
       if(btn.dataset.tab === 'packages') renderPackageList();
       if(btn.dataset.tab === 'inventory') renderInventoryTable();
+      if(btn.dataset.tab === 'dispatch') renderDispatch();
+      if(btn.dataset.tab === 'calendar') renderCalendar();
     });
   });
 
@@ -2780,9 +3100,11 @@ function initApp(){
     row.className = 'ingredient-row';
     row.dataset.rowId = id;
     row.innerHTML = `
-      <div>
+      <div class="ing-name-wrap">
         <span class="mini-label">Ingredient</span>
-        <input type="text" class="f-name" placeholder="e.g. Chicken thigh" value="${data.name ? escapeHtml(data.name) : ''}">
+        <input type="text" class="f-name" autocomplete="off" placeholder="e.g. Chicken thigh" value="${data.name ? escapeHtml(data.name) : ''}">
+        <div class="ing-suggest-list" style="display:none;"></div>
+        <div class="ing-status-note"></div>
       </div>
       <div>
         <span class="mini-label">Qty</span>
@@ -2808,11 +3130,231 @@ function initApp(){
       row.remove();
       updateSummary();
     });
+
+    // ---------- Ingredient suggestion / autocomplete, sourced from Inventory ----------
+    // Typing shows existing inventory items whose name starts with what was
+    // typed ("basis will be on the existing items present in the inventory").
+    // Picking one auto-fills UOM and unit price (read-only) from that item;
+    // typing something that matches nothing shows "Not found" and leaves
+    // qty/UOM/price open for manual entry.
+    const nameInput = row.querySelector('.f-name');
+    const suggestList = row.querySelector('.ing-suggest-list');
+    const statusNote = row.querySelector('.ing-status-note');
+    const priceInput = row.querySelector('.f-price');
+    const uomSelect = row.querySelector('.f-uom');
+
+    function updateStatusNote(){
+      const val = nameInput.value.trim();
+      if(!val){ statusNote.textContent = ''; statusNote.className = 'ing-status-note'; return; }
+      const exact = (inventory || []).find(it => it.name && it.name.toLowerCase() === val.toLowerCase());
+      if(exact){
+        statusNote.textContent = 'In inventory · ' + exact.uom + (exact.price ? ' · ' + PHP(exact.price) : '');
+        statusNote.className = 'ing-status-note found';
+      } else {
+        statusNote.textContent = 'Not found in inventory — enter qty, UOM & price manually.';
+        statusNote.className = 'ing-status-note notfound';
+      }
+    }
+
+    function renderSuggestions(){
+      const q = nameInput.value.trim().toLowerCase();
+      if(!q){ suggestList.style.display = 'none'; suggestList.innerHTML = ''; updateStatusNote(); return; }
+      const matches = (inventory || [])
+        .filter(it => it.name && it.name.toLowerCase().startsWith(q))
+        .slice(0, 8);
+      if(matches.length){
+        suggestList.innerHTML = matches.map(it => `
+          <div class="ing-suggest-item" data-name="${escapeHtml(it.name)}" data-uom="${escapeHtml(it.uom)}" data-price="${it.price || 0}">
+            <span>${escapeHtml(it.name)}</span>
+            <span class="sugg-meta">${escapeHtml(it.uom)}${it.price ? ' · ' + PHP(it.price) : ''}</span>
+          </div>
+        `).join('');
+      } else {
+        suggestList.innerHTML = `<div class="ing-suggest-empty">Not found in inventory</div>`;
+      }
+      suggestList.style.display = 'block';
+      updateStatusNote();
+    }
+
+    nameInput.addEventListener('input', ()=>{
+      // Any manual edit invalidates a previous auto-fill lock.
+      priceInput.readOnly = false;
+      priceInput.title = '';
+      renderSuggestions();
+    });
+    nameInput.addEventListener('focus', renderSuggestions);
+    nameInput.addEventListener('blur', ()=>{
+      setTimeout(()=>{ suggestList.style.display = 'none'; }, 150);
+    });
+    suggestList.addEventListener('mousedown', (e)=>{
+      const item = e.target.closest('.ing-suggest-item');
+      if(!item) return;
+      e.preventDefault();
+      nameInput.value = item.dataset.name;
+      const uom = item.dataset.uom;
+      if(uom && Array.from(uomSelect.options).some(o => o.value === uom)) uomSelect.value = uom;
+      const price = parseFloat(item.dataset.price) || 0;
+      if(price > 0){
+        priceInput.value = price;
+        priceInput.readOnly = true;
+        priceInput.title = 'Auto-filled from Inventory Status — update the price there to change it.';
+      } else {
+        priceInput.readOnly = false;
+        priceInput.title = '';
+      }
+      suggestList.style.display = 'none';
+      updateStatusNote();
+      updateSummary();
+      row.querySelector('.f-qty').focus();
+    });
+
+    if(data.name) updateStatusNote();
+
     updateSummary();
+  }
+
+  // Keeps a "Saving…" state visible for at least `ms` even if the actual
+  // save resolves instantly, so the loading state is an actual guide to the
+  // user rather than a flash they might miss.
+  function withMinDelay(promise, ms){
+    return Promise.all([promise, new Promise(res => setTimeout(res, ms))]).then(([result]) => result);
+  }
+
+  // ---------- Shared "print this section only" helper ----------
+  // Opens a clean, presentable, standalone print document for just the
+  // given section — never the whole screen — used by Recipe Manual (CCP
+  // notes) and Ingredients Procurement (replenishment shopping list).
+  function printSection(title, bodyHtml){
+    const win = window.open('', '_blank', 'width=820,height=920');
+    if(!win){
+      alert('Please allow pop-ups for this site to print.');
+      return;
+    }
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>${escapeHtml(title)}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+          *{box-sizing:border-box;}
+          body{font-family:'Inter',sans-serif;color:#1B1E1A;margin:0;padding:30px 34px;}
+          h1{font-family:'Space Grotesk',sans-serif;font-size:21px;margin:0 0 3px;}
+          .print-sub{color:#6B6F66;font-size:12px;margin:0 0 18px;font-family:'IBM Plex Mono',monospace;}
+          .section-label{
+            font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6B6F66;
+            text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;
+          }
+          table{width:100%;border-collapse:collapse;margin:6px 0 4px;}
+          th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #D8D4C6;font-size:12.5px;vertical-align:top;}
+          th{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6B6F66;text-transform:uppercase;letter-spacing:.03em;}
+          td.num, th.num{text-align:right;white-space:nowrap;}
+          .ccp-box{background:#EDEAE0;border-radius:4px;padding:12px 14px;font-size:13px;white-space:pre-wrap;line-height:1.5;}
+          .stamp{margin-top:28px;font-size:10px;color:#6B6F66;font-family:'IBM Plex Mono',monospace;}
+          :root{--rust:#B14A2C;--herb:#5C7A5A;--gold:#B5892E;--steel:#6B6F66;}
+          .pkg-piechart{border-top:1px solid #D8D4C6;padding-top:10px;margin-top:16px;}
+          .piechart-row{display:flex;align-items:center;gap:18px;}
+          .piechart-circle{width:104px;height:104px;min-width:104px;border-radius:50%;background:#EDEAE0;box-shadow:inset 0 0 0 1px #D8D4C6;}
+          .piechart-legend{flex:1;display:flex;flex-direction:column;gap:8px;}
+          .legend-item{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11.5px;}
+          .legend-label{display:flex;align-items:center;gap:7px;color:#4B4E46;}
+          .legend-swatch{width:9px;height:9px;border-radius:2px;flex-shrink:0;display:inline-block;}
+          .legend-value{font-family:'IBM Plex Mono',monospace;color:#1B1E1A;white-space:nowrap;}
+          .legend-warning{font-size:10.5px;color:#B14A2C;margin-top:6px;font-family:'IBM Plex Mono',monospace;}
+          @media print{
+            body{padding:10mm 12mm;}
+            .stamp{position:fixed;bottom:8mm;left:12mm;}
+          }
+        </style>
+      </head>
+      <body>
+        ${bodyHtml}
+        <div class="stamp">Printed ${new Date().toLocaleString('en-PH')} · Kitchen Cost Rail</div>
+      </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    // Give the webfont/layout a beat to settle before the print dialog opens.
+    setTimeout(()=>{ win.print(); }, 300);
   }
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ---------- Shared static pie-chart renderer (view modal + print) ----------
+  // Builds the same conic-gradient circle + legend used live on the Package
+  // Cost Calculator form, but from already-saved numbers rather than the
+  // live form inputs — so it works in the read-only "View" modal and in a
+  // print window, neither of which has the live form on screen.
+  // slices: [{ label, value, color, pct(optional) }]. If a slice provides
+  // its own `pct`, that's shown instead of value/total (used for the price
+  // structure chart, whose slices can be negative and don't sum to a clean
+  // total). warning: optional extra line shown under the legend.
+  function buildPieChartHtml(slices, warning){
+    const total = slices.reduce((s,x)=>s + Math.max(0, x.value), 0);
+    let bg = '#33362F';
+    if(total > 0){
+      let cumulative = 0;
+      const stops = slices.map(s=>{
+        const start = cumulative;
+        const width = (Math.max(0, s.value) / total) * 100;
+        cumulative += width;
+        return `${s.color} ${start}% ${cumulative}%`;
+      }).join(', ');
+      bg = `conic-gradient(${stops})`;
+    }
+    const legend = slices.map(s=>{
+      const pct = s.pct !== undefined ? s.pct : (total > 0 ? (s.value/total)*100 : 0);
+      return `
+        <div class="legend-item">
+          <span class="legend-label"><span class="legend-swatch" style="background:${s.color};"></span>${escapeHtml(s.label)}</span>
+          <span class="legend-value">${PHP(s.value)} (${pct.toFixed(pct < 10 && pct !== 0 ? 1 : 0)}%)</span>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div class="piechart-row">
+        <div class="piechart-circle" style="background:${bg};"></div>
+        <div class="piechart-legend">${legend}</div>
+      </div>
+      ${warning ? `<div class="legend-warning">${escapeHtml(warning)}</div>` : ''}
+    `;
+  }
+
+  // Cost-breakdown slices (food / service / misc) straight from a saved package.
+  function pkgCostBreakdownSlices(pkg){
+    return [
+      { label:'Food item cost total (no ×3)', value: pkg.rawFoodTotal || 0, color:'var(--rust)' },
+      { label:'Service cost total', value: pkg.serviceTotal || 0, color:'var(--herb)' },
+      { label:'Miscellaneous cost total', value: pkg.miscTotal || 0, color:'var(--gold)' }
+    ];
+  }
+
+  // Price-structure slices (Cost of Goods / VAT / Margin) from a saved
+  // package's own VAT rate and standard (target) package price — the same
+  // reference price the admin typed in when they built or last edited it.
+  function pkgPriceStructure(pkg){
+    const packageCost = pkg.standardPackagePrice || 0;
+    if(packageCost <= 0) return null;
+    const foodCostPerPax = pkg.foodSubtotal || 0;
+    const vatRate = pkg.vatRate !== undefined && pkg.vatRate !== null ? pkg.vatRate : 12;
+    const cogsPct = (foodCostPerPax / packageCost) * 100;
+    const vatPct = vatRate;
+    const marginPct = 100 - cogsPct - vatPct;
+    const cogsAmount = foodCostPerPax;
+    const vatAmount = packageCost * (vatPct / 100);
+    const marginAmount = packageCost - cogsAmount - vatAmount;
+    return {
+      packageCost, vatRate, marginPct,
+      slices: [
+        { label:'Cost of Goods', value: cogsAmount, pct: cogsPct, color:'var(--rust)' },
+        { label:'VAT', value: vatAmount, pct: vatPct, color:'#5B7C99' },
+        { label:'Margin', value: marginAmount, pct: marginPct, color:'var(--herb)' }
+      ]
+    };
   }
 
   document.getElementById('addIngredientBtn').addEventListener('click', ()=>addIngredientRow());
@@ -2966,7 +3508,7 @@ function initApp(){
           updatedAt: new Date().toISOString()
         };
       }
-      await persistRecipes();
+      await withMinDelay(persistRecipes(), 500);
       renderRecipeList();
       renderProcurement();
 
@@ -2984,7 +3526,7 @@ function initApp(){
         savedAt: new Date().toISOString()
       };
       recipes.unshift(recipe);
-      await persistRecipes();
+      await withMinDelay(persistRecipes(), 500);
       renderRecipeList();
       renderProcurement();
 
@@ -3061,10 +3603,12 @@ function initApp(){
   }
 
   function viewPackageDetail(pkg){
-    const foodRows = (pkg.foodItems||[]).map(f => `<tr><td>${escapeHtml(f.recipeName||f.desc||'—')}</td><td>${PHP(f.price||0)}</td></tr>`).join('');
+    const foodRows = (pkg.foodItems||[]).map(f => `<tr><td>${escapeHtml(f.description||f.recipeName||f.desc||'—')}</td><td>${PHP(f.price||0)}</td></tr>`).join('');
     const svcRows = (pkg.serviceItems||[]).filter(s=>s.qty>0).map(s => `<tr><td>${escapeHtml(s.role)}</td><td>${s.qty} × ${PHP(s.price)}</td></tr>`).join('');
-    const miscRows = (pkg.miscItems||[]).map(m => `<tr><td>${escapeHtml(m.desc||'—')}</td><td>${PHP(m.price||0)}</td></tr>`).join('');
+    const miscRows = (pkg.miscItems||[]).map(m => `<tr><td>${escapeHtml(m.desc||m.description||'—')}</td><td>${PHP(m.price||0)}</td></tr>`).join('');
+    const structure = pkgPriceStructure(pkg);
     openViewModal(pkg.name, `
+      <button type="button" class="print-btn pkg-view-print-btn" style="margin-bottom:12px;">🖨 Print this package</button>
       ${pkg.soNumber ? `<p><span class="so-tag">SO# ${escapeHtml(pkg.soNumber)}</span></p>` : ''}
       <p style="font-size:12.5px;color:var(--ink-soft);">${pkg.pax ? pkg.pax + ' pax · ' : ''}food ×3/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(pkg.serviceTotal||0)} · misc (flat): ${PHP(pkg.miscTotal)}</p>
       <p style="font-weight:600;margin:10px 0 4px;">Food items</p>
@@ -3074,6 +3618,65 @@ function initApp(){
       <p style="font-weight:600;margin:10px 0 4px;">Miscellaneous</p>
       <table class="access-table"><tbody>${miscRows || '<tr><td>None</td></tr>'}</tbody></table>
       <p style="margin-top:10px;font-weight:600;">Grand total: ${PHP(pkg.grandTotal)}</p>
+      <p style="font-weight:600;">Price per 1 pax: ${PHP(pkg.pricePerPax || 0)}</p>
+      <div class="pkg-piechart">
+        <p class="section-label" style="color:var(--steel);margin-bottom:10px;">COST BREAKDOWN</p>
+        ${buildPieChartHtml(pkgCostBreakdownSlices(pkg))}
+      </div>
+      ${structure ? `
+        <div class="pkg-piechart">
+          <p class="section-label" style="color:var(--steel);margin-bottom:10px;">PRICE STRUCTURE (% of ${PHP(structure.packageCost)} standard package · VAT ${structure.vatRate}%)</p>
+          ${buildPieChartHtml(structure.slices, structure.marginPct < 0 ? '⚠ Cost of Goods + VAT exceed the total package price' : null)}
+        </div>
+      ` : `
+        <div class="pkg-piechart">
+          <p class="section-label" style="color:var(--steel);margin-bottom:10px;">PRICE STRUCTURE</p>
+          <p style="font-size:12px;color:var(--ink-soft);">No standard package price was set when this was saved — edit the package and set one to see this breakdown.</p>
+        </div>
+      `}
+    `);
+    const printBtn = document.getElementById('viewDetailBody').querySelector('.pkg-view-print-btn');
+    if(printBtn) printBtn.addEventListener('click', ()=>printPackage(pkg));
+  }
+
+  // Same "print just this section" pattern as Recipe Manual — a clean,
+  // standalone print document for one saved package, including both charts
+  // as static, non-interactive versions (a conic-gradient circle + legend).
+  function printPackage(pkg){
+    const foodRows = (pkg.foodItems||[]).map(f => `<tr><td>${escapeHtml(f.description||f.recipeName||f.desc||'—')}</td><td class="num">${PHP(f.price||0)}</td><td class="num">${PHP(f.charged||0)}</td></tr>`).join('');
+    const svcRows = (pkg.serviceItems||[]).filter(s=>s.qty>0).map(s => `<tr><td>${escapeHtml(s.role)}</td><td class="num">${s.qty} × ${PHP(s.price)}</td><td class="num">${PHP((s.qty||0)*(s.price||0))}</td></tr>`).join('');
+    const miscRows = (pkg.miscItems||[]).map(m => `<tr><td>${escapeHtml(m.desc||m.description||'—')}</td><td class="num" colspan="2">${PHP(m.price||0)}</td></tr>`).join('');
+    const structure = pkgPriceStructure(pkg);
+    printSection(pkg.name + ' — Package Cost Calculator', `
+      <h1>${escapeHtml(pkg.name)}</h1>
+      <p class="print-sub">${pkg.soNumber ? 'SO# ' + escapeHtml(pkg.soNumber) + ' · ' : ''}${pkg.pax ? pkg.pax + ' pax' : ''}</p>
+      <p class="section-label">Food items (×3 markup applied)</p>
+      <table>
+        <thead><tr><th>Recipe</th><th class="num">Price /pax</th><th class="num">×3 price</th></tr></thead>
+        <tbody>${foodRows || '<tr><td colspan="3">None</td></tr>'}</tbody>
+      </table>
+      <p class="section-label">Service staff &amp; logistics</p>
+      <table>
+        <thead><tr><th>Role</th><th class="num">Price × qty</th><th class="num">Line total</th></tr></thead>
+        <tbody>${svcRows || '<tr><td colspan="3">None</td></tr>'}</tbody>
+      </table>
+      <p class="section-label">Miscellaneous</p>
+      <table>
+        <thead><tr><th>Description</th><th class="num" colspan="2">Price</th></tr></thead>
+        <tbody>${miscRows || '<tr><td colspan="2">None</td></tr>'}</tbody>
+      </table>
+      <p style="margin-top:14px;font-weight:600;">Grand total: ${PHP(pkg.grandTotal)}</p>
+      <p style="font-weight:600;">Price per 1 pax: ${PHP(pkg.pricePerPax || 0)}</p>
+      <div class="pkg-piechart">
+        <p class="section-label">Cost breakdown</p>
+        ${buildPieChartHtml(pkgCostBreakdownSlices(pkg))}
+      </div>
+      ${structure ? `
+        <div class="pkg-piechart">
+          <p class="section-label">Price structure (% of ${PHP(structure.packageCost)} standard package · VAT ${structure.vatRate}%)</p>
+          ${buildPieChartHtml(structure.slices, structure.marginPct < 0 ? '⚠ Cost of Goods + VAT exceed the total package price' : null)}
+        </div>
+      ` : ''}
     `);
   }
 
@@ -3192,15 +3795,51 @@ function initApp(){
       stockoutCard.style.display = 'none';
     } else {
       stockoutCard.style.display = 'block';
-      stockoutListEl.innerHTML = stockoutSummary.items.map(it => `
+      stockoutListEl.innerHTML = stockoutSummary.items.map(it => {
+        const batchesHtml = (it.batches && it.batches.length)
+          ? it.batches.map(b => `#${escapeHtml(b.batchNumber)} — needed ${formatDateDisplay(b.batchDate)}`).join(', ')
+          : '—';
+        return `
         <div class="stockout-row">
           <div>
             <div class="so-name">${escapeHtml(it.name)} <span class="stockout-tag">SHORT ${it.shortage.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)}</span></div>
-            <div class="so-meta">need ${it.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)} · have ${it.onHand.toLocaleString('en-PH',{maximumFractionDigits:2})}</div>
+            <div class="so-meta">need ${it.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)} · have ${it.onHand.toLocaleString('en-PH',{maximumFractionDigits:2})}
+              <span class="so-batches">${batchesHtml}</span>
+            </div>
           </div>
           <div class="so-cost">${PHP(it.cost)}</div>
         </div>
-      `).join('');
+      `;
+      }).join('');
+    }
+
+    const printReplenishBtn = document.getElementById('printReplenishBtn');
+    if(printReplenishBtn){
+      printReplenishBtn.onclick = ()=>{
+        const rows = stockoutSummary.items.map(it => {
+          const batchesHtml = (it.batches && it.batches.length)
+            ? it.batches.map(b => `#${escapeHtml(b.batchNumber)} (${escapeHtml(b.eventName)}) — needed ${formatDateDisplay(b.batchDate)}`).join('<br>')
+            : '—';
+          return `
+            <tr>
+              <td>${escapeHtml(it.name)}</td>
+              <td class="num">${it.shortage.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)}</td>
+              <td class="num">${it.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)}</td>
+              <td class="num">${it.onHand.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(it.uom)}</td>
+              <td class="num">${PHP(it.cost)}</td>
+              <td>${batchesHtml}</td>
+            </tr>
+          `;
+        }).join('');
+        printSection('Ingredients to Replenish', `
+          <h1>Ingredients to Replenish</h1>
+          <p class="print-sub">Shopping reference for the purchaser · ${stockoutSummary.items.length} item${stockoutSummary.items.length===1?'':'s'} short · estimated total ${PHP(stockoutSummary.totalCost)}</p>
+          <table>
+            <thead><tr><th>Ingredient</th><th class="num">Short by</th><th class="num">Needed</th><th class="num">On hand</th><th class="num">Est. cost</th><th>Batch # · date needed</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `);
+      };
     }
 
     const wrap = document.getElementById('procTableWrap');
@@ -3313,6 +3952,7 @@ function initApp(){
     container.innerHTML = `
       <div class="ccp-recipe-name">${escapeHtml(recipe.name)}</div>
       <div class="ccp-meta">yield ${recipe.yieldVal} pax · ${PHP(recipe.costPerPax)} / pax</div>
+      <button class="print-btn ccp-print-btn" type="button" style="margin:8px 0 2px;">🖨 Print this recipe</button>
       <div class="ccp-ing-list">
         ${recipe.ingredients.map(ing => `
           <div class="ccp-ing-row">
@@ -3327,16 +3967,46 @@ function initApp(){
       <div class="ccp-save-msg"></div>
     `;
 
-    container.querySelector('.ccp-save-btn').addEventListener('click', async ()=>{
+    const ccpSaveBtn = container.querySelector('.ccp-save-btn');
+    ccpSaveBtn.addEventListener('click', async ()=>{
+      if(ccpSaveBtn.disabled) return; // guard against duplicate clicks while saving
       const notes = container.querySelector('.ccp-textarea').value;
       const idx = recipes.findIndex(r => r.id === recipe.id);
-      if(idx !== -1){
+      if(idx === -1) return;
+      const msg = container.querySelector('.ccp-save-msg');
+      ccpSaveBtn.disabled = true;
+      const _label = ccpSaveBtn.textContent;
+      ccpSaveBtn.textContent = 'Saving…';
+      if(msg){ msg.textContent = ''; msg.className = 'ccp-save-msg'; }
+      try{
         recipes[idx].ccpNotes = notes;
-        await persistRecipes();
-        const msg = container.querySelector('.ccp-save-msg');
-        msg.textContent = 'Saved to recipe manual.';
-        setTimeout(()=>{ if(msg) msg.textContent = ''; }, 2500);
+        await withMinDelay(persistRecipes(), 500);
+        if(msg){
+          msg.textContent = '✓ Saved — critical control points are on file for this recipe.';
+          setTimeout(()=>{ if(msg) msg.textContent = ''; }, 2500);
+        }
+      } finally {
+        ccpSaveBtn.disabled = false;
+        ccpSaveBtn.textContent = _label;
       }
+    });
+
+    container.querySelector('.ccp-print-btn').addEventListener('click', ()=>{
+      const notes = container.querySelector('.ccp-textarea').value.trim() || 'No critical control points recorded yet.';
+      const ingRows = recipe.ingredients.map(ing => `
+        <tr><td>${escapeHtml(ing.name)}</td><td class="num">${ing.qty} ${escapeHtml(ing.uom)}</td></tr>
+      `).join('');
+      printSection(recipe.name + ' — Recipe Manual', `
+        <h1>${escapeHtml(recipe.name)}</h1>
+        <p class="print-sub">${escapeHtml(recipe.category || course)} · yield ${recipe.yieldVal} pax · ${PHP(recipe.costPerPax)} / pax</p>
+        <p class="section-label">Ingredients</p>
+        <table>
+          <thead><tr><th>Ingredient</th><th class="num">Qty</th></tr></thead>
+          <tbody>${ingRows}</tbody>
+        </table>
+        <p class="section-label">Critical control points</p>
+        <div class="ccp-box">${escapeHtml(notes)}</div>
+      `);
     });
   }
 
@@ -3423,6 +4093,8 @@ function initApp(){
     document.getElementById('prodCategory').value = '';
     document.getElementById('prodStart').value = '';
     document.getElementById('prodEnd').value = '';
+    document.getElementById('prodCommi').value = '';
+    document.getElementById('prodEventPlace').value = '';
     document.getElementById('batchNumberHint').textContent = 'Batch #: will be assigned when saved';
     updateRunEstimate();
   }
@@ -3437,6 +4109,8 @@ function initApp(){
     document.getElementById('prodCategory').value = plan.category || '';
     document.getElementById('prodStart').value = plan.startTime;
     document.getElementById('prodEnd').value = plan.endTime;
+    document.getElementById('prodCommi').value = plan.commi || '';
+    document.getElementById('prodEventPlace').value = plan.eventPlace || '';
     document.getElementById('batchNumberHint').textContent = 'Batch #: ' + (plan.batchNumber || '—') + ' (permanent, does not change)';
     updateRunEstimate();
 
@@ -3477,6 +4151,8 @@ function initApp(){
     const category = document.getElementById('prodCategory').value;
     const startTime = document.getElementById('prodStart').value;
     const endTime = document.getElementById('prodEnd').value;
+    const commi = document.getElementById('prodCommi').value.trim();
+    const eventPlace = document.getElementById('prodEventPlace').value.trim();
 
     prodFormMsg.className = 'form-msg';
     prodFormMsg.textContent = '';
@@ -3501,6 +4177,11 @@ function initApp(){
       prodFormMsg.className = 'form-msg err';
       return;
     }
+    if(!commi){
+      prodFormMsg.textContent = 'Enter the commi in charge of this production.';
+      prodFormMsg.className = 'form-msg err';
+      return;
+    }
     if(!category){
       prodFormMsg.textContent = 'Select a production category.';
       prodFormMsg.className = 'form-msg err';
@@ -3521,7 +4202,7 @@ function initApp(){
         plans[idx] = {
           ...plan,
           eventName, eventDate, recipeId, recipeName: recipe.name,
-          pax, batchDate, category, startTime, endTime,
+          pax, batchDate, category, startTime, endTime, commi, eventPlace,
           batches, estCost,
           updatedAt: new Date().toISOString()
         };
@@ -3547,8 +4228,9 @@ function initApp(){
         id: 'p-' + Date.now(),
         batchNumber,
         eventName, eventDate, recipeId, recipeName: recipe.name,
-        pax, batchDate, category, startTime, endTime,
+        pax, batchDate, category, startTime, endTime, commi, eventPlace,
         batches, estCost,
+        released: false, releasedAt: '',
         stockCommitted: false,
         committedIngredients: [],
         savedAt: createdAt.toISOString()
@@ -3562,7 +4244,7 @@ function initApp(){
       await persistPlans();
       await syncProductionCommitments();
       renderProductionList();
-      prodFormMsg.textContent = 'Scheduled "' + eventName + '" as batch #' + batchNumber + (committed ? ' — ingredients reserved from stock.' : ' — on Hold, short of stock.');
+      prodFormMsg.textContent = 'Scheduled "' + eventName + '" as batch #' + batchNumber + ' — on Hold until the ingredients are released.';
       prodFormMsg.className = 'form-msg ok';
       resetProdForm();
     }
@@ -3647,14 +4329,19 @@ function initApp(){
       ? '<span class="status-tag" style="background:var(--surface-alt);color:var(--steel);">DONE</span>'
       : (p.stockCommitted
         ? '<span class="status-tag go">GO — stock reserved</span>'
-        : '<span class="status-tag nogo">NO-GO</span>');
+        : '<span class="status-tag nogo">NO-GO — not yet released</span>');
 
     let actionsHtml = `<button type="button" data-action="view-prod">View</button>`;
     if(p.validated){
-      actionsHtml += (canValidate() ? `<button type="button" data-action="reopen-prod">Reopen</button>` : '') +
+      actionsHtml += `<button type="button" data-action="stub-prod">Print stub</button>` +
+        (canValidate() ? `<button type="button" data-action="reopen-prod">Reopen</button>` : '') +
         (canDelete() ? `<button type="button" class="del" data-action="delete-prod">Delete</button>` : '');
     } else {
-      actionsHtml += (canValidate() ? `<button type="button" class="validate" data-action="validate-prod">Validate</button>` : '') +
+      if(!p.released){
+        actionsHtml += (canValidate() ? `<button type="button" class="validate" data-action="release-prod">Release</button>` : '');
+      }
+      actionsHtml += `<button type="button" data-action="stub-prod">Print stub</button>`;
+      actionsHtml += ((canValidate() && p.released) ? `<button type="button" class="validate" data-action="validate-prod">Validate</button>` : '') +
         (canEdit() ? `<button type="button" data-action="edit-prod">Edit</button>` : '') +
         (canDelete() ? `<button type="button" class="del" data-action="delete-prod">Delete</button>` : '');
     }
@@ -3667,6 +4354,7 @@ function initApp(){
         <div class="rname">${escapeHtml(p.eventName)}</div>
         <div class="rmeta">
           ${escapeHtml(p.recipeName)} · ${p.pax} pax needed · ${p.batches} batch${p.batches===1?'':'es'}<br>
+          commi: ${escapeHtml(p.commi || '—')}${p.eventPlace ? ' · ' + escapeHtml(p.eventPlace) : ''}<br>
           batch date ${formatDateDisplay(p.batchDate)} · ${timing}
         </div>
         <div class="rprice">${PHP(p.estCost)} est. cost</div>
@@ -3779,29 +4467,27 @@ function initApp(){
       });
     });
 
-    productionBoardEl.querySelectorAll('[data-action="validate-prod"]').forEach(btn=>{
-      btn.addEventListener('click', async (e)=>{
+    productionBoardEl.querySelectorAll('[data-action="release-prod"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
         const id = e.target.closest('.kanban-card').dataset.id;
         const plan = plans.find(p => p.id === id);
-        if(!plan) return;
-        const confirmed = window.confirm('Confirm production batch #' + (plan.batchNumber || '') + ' ("' + plan.eventName + '") is validated and complete? Its reserved ingredients stay consumed and it moves to Done.');
-        if(!confirmed) return;
+        if(plan) openReleaseModal(plan);
+      });
+    });
 
-        // Normally this plan already had its stock committed the moment it
-        // became Processing. If it's somehow still on Hold, force-consume
-        // whatever is left (floors at 0) rather than silently going negative.
-        if(!plan.stockCommitted){
-          const recipe = recipes.find(r => r.id === plan.recipeId);
-          if(recipe) commitPlanStock(plan, recipe, { force: true });
-          await persistInventory();
-        }
+    productionBoardEl.querySelectorAll('[data-action="stub-prod"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.kanban-card').dataset.id;
+        const plan = plans.find(p => p.id === id);
+        if(plan) printBatchStub(plan);
+      });
+    });
 
-        plan.validated = true;
-        plan.validatedAt = new Date().toISOString();
-        await persistPlans();
-        await syncProductionCommitments();
-        renderProductionList();
-        renderInventoryTable();
+    productionBoardEl.querySelectorAll('[data-action="validate-prod"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.target.closest('.kanban-card').dataset.id;
+        const plan = plans.find(p => p.id === id);
+        if(plan) openValidateModal(plan);
       });
     });
 
@@ -3812,15 +4498,730 @@ function initApp(){
         if(!plan) return;
         const confirmed = window.confirm('Move batch #' + (plan.batchNumber || '') + ' ("' + plan.eventName + '") back out of Done? Its reserved stock stays deducted and it returns to Processing.');
         if(!confirmed) return;
+        if(plan.dispatchedAt){
+          window.alert('This batch has already been dispatched, so it can no longer be reopened.');
+          return;
+        }
         plan.validated = false;
+        plan.cookedPax = 0;
         await persistPlans();
         renderProductionList();
+        renderDispatch();
       });
     });
 
     if(tvBoardOverlay.style.display !== 'none') renderTvBoard();
     renderInventoryTable();
   }
+
+
+  // =====================================================================
+  // PRODUCTION PLANNING REVISION
+  //   · Release + Proceed is now the ONLY thing that takes ingredients out
+  //     of stock (nothing is deducted automatically on save anymore).
+  //   · Validate prompts for raw-meat excess before a batch can go to Done,
+  //     and each excess line is either returned as recycled raw meat or
+  //     disposed (recorded in the stock change history).
+  //   · A batch that reaches Done becomes cooked food (in pax) on the
+  //     Dispatching board.
+  // =====================================================================
+  const prodActionOverlay = document.getElementById('prodActionOverlay');
+  const prodActionTitleEl = document.getElementById('prodActionTitle');
+  const prodActionBodyEl = document.getElementById('prodActionBody');
+  const prodActionMsgEl = document.getElementById('prodActionMsg');
+  const prodActionConfirmBtn = document.getElementById('prodActionConfirmBtn');
+  let prodActionHandler = null;
+
+  function closeProdAction(){
+    prodActionOverlay.style.display = 'none';
+    prodActionBodyEl.innerHTML = '';
+    prodActionHandler = null;
+  }
+  document.getElementById('prodActionCancelBtn').addEventListener('click', closeProdAction);
+  prodActionConfirmBtn.addEventListener('click', async ()=>{
+    if(!prodActionHandler || prodActionConfirmBtn.disabled) return;
+    prodActionConfirmBtn.disabled = true;
+    const label = prodActionConfirmBtn.textContent;
+    prodActionConfirmBtn.textContent = 'Working…';
+    try{ await prodActionHandler(); }
+    finally{
+      prodActionConfirmBtn.disabled = false;
+      prodActionConfirmBtn.textContent = label;
+    }
+  });
+
+  function openProdAction(title, bodyHtml, confirmLabel, handler){
+    prodActionTitleEl.textContent = title;
+    prodActionBodyEl.innerHTML = bodyHtml;
+    prodActionMsgEl.textContent = '';
+    prodActionMsgEl.className = 'form-msg';
+    prodActionConfirmBtn.textContent = confirmLabel;
+    prodActionHandler = handler;
+    prodActionOverlay.style.display = 'flex';
+  }
+
+  function planIngredientLines(plan){
+    const recipe = recipes.find(r => r.id === plan.recipeId);
+    if(!recipe) return [];
+    return (recipe.ingredients || []).map(ing=>{
+      const inv = inventory.find(i => i.key === ingredientKey(ing.name, ing.uom));
+      return {
+        name: ing.name, uom: ing.uom,
+        required: ing.qty * plan.batches,
+        onHand: inv ? (inv.stock || 0) : 0,
+        rawMeat: inv ? !!inv.rawMeat : false
+      };
+    });
+  }
+
+  // ---------- Release ----------
+  function openReleaseModal(plan){
+    if(!canValidate()) return;
+    const lines = planIngredientLines(plan);
+    if(lines.length === 0){
+      window.alert('This batch has no recipe ingredients to release.');
+      return;
+    }
+    const rowsHtml = lines.map((l,i)=>`
+      <tr>
+        <td><label style="display:flex;align-items:center;gap:8px;font-weight:400;margin:0;">
+          <input type="checkbox" class="release-check" data-idx="${i}" style="width:auto;margin:0;">
+          ${escapeHtml(l.name)}
+        </label></td>
+        <td class="num">${l.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(l.uom)}</td>
+        <td class="num" style="${l.onHand < l.required ? 'color:var(--rust);' : ''}">${l.onHand.toLocaleString('en-PH',{maximumFractionDigits:2})}</td>
+      </tr>`).join('');
+    const body = `
+      <p class="recipe-hint">Batch #${escapeHtml(plan.batchNumber || '—')} · ${escapeHtml(plan.eventName)} ·
+      commi: ${escapeHtml(plan.commi || '—')}</p>
+      <p style="font-size:12.5px;line-height:1.5;">
+        Physically check and distribute each ingredient below, then tick it off. Clicking
+        <b>Proceed</b> takes all of these out of the inventory — the person releasing them is accountable
+        for what leaves the storeroom.
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+        <thead><tr>
+          <th style="text-align:left;">Ingredient</th>
+          <th style="text-align:right;">To release</th>
+          <th style="text-align:right;">On hand</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+    openProdAction('Release ingredients — Batch #' + (plan.batchNumber || ''), body, 'Proceed', async ()=>{
+      const boxes = [...prodActionBodyEl.querySelectorAll('.release-check')];
+      if(boxes.some(b => !b.checked)){
+        prodActionMsgEl.textContent = 'Tick every ingredient once it has been checked and distributed.';
+        prodActionMsgEl.className = 'form-msg err';
+        return;
+      }
+      const recipe = recipes.find(r => r.id === plan.recipeId);
+      if(!recipe){
+        prodActionMsgEl.textContent = 'The recipe for this batch no longer exists.';
+        prodActionMsgEl.className = 'form-msg err';
+        return;
+      }
+      plan.released = true;
+      plan.releasedAt = new Date().toISOString();
+      plan.releasedBy = currentUser || currentRole || '';
+      commitPlanStock(plan, recipe, { force: true });
+      await persistInventory();
+      await persistPlans();
+      await persistInventoryHistory();
+      closeProdAction();
+      renderProductionList();
+      renderInventoryTable();
+      renderCalendar();   // the released batch now shows in red on the calendar
+    });
+  }
+
+  // ---------- Validate (meat excess prompt) ----------
+  function openValidateModal(plan){
+    if(!canValidate()) return;
+    if(!plan.released){
+      window.alert('Release the ingredients for this batch first — Validate only comes after Release and Proceed.');
+      return;
+    }
+    const meats = planIngredientLines(plan).filter(l => l.rawMeat);
+    const meatRows = meats.length === 0
+      ? '<p class="recipe-hint">No ingredient in this batch is tagged as raw meat, so there is no excess to collect.</p>'
+      : meats.map((m,i)=>`
+        <div class="stockout-card" style="display:block;margin-bottom:10px;">
+          <b>${escapeHtml(m.name)}</b> <span class="recipe-hint">(released ${m.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(m.uom)})</span>
+          <div class="field-row" style="margin-top:8px;">
+            <div>
+              <label>Excess remaining (${escapeHtml(m.uom)})</label>
+              <input type="number" class="meat-qty" data-idx="${i}" min="0" step="0.01" value="0">
+            </div>
+            <div>
+              <label>What happens to it</label>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin:0;">
+                  <input type="checkbox" class="meat-staff" data-idx="${i}" style="width:auto;margin:0;"> Staff meal (return as recycled meat)
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin:0;">
+                  <input type="checkbox" class="meat-dispose" data-idx="${i}" style="width:auto;margin:0;"> Dispose
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>`).join('');
+    const body = `
+      <p class="recipe-hint">Batch #${escapeHtml(plan.batchNumber || '—')} · ${escapeHtml(plan.eventName)} ·
+      ${escapeHtml(plan.recipeName)} · ${plan.pax} pax</p>
+      <p style="font-size:12.5px;line-height:1.5;">
+        Before this batch moves to Done, record the raw-meat excess. Everything else in the batch was already
+        taken out at Release.
+      </p>
+      ${meatRows}`;
+    openProdAction('Validate — Batch #' + (plan.batchNumber || ''), body, 'Confirm & move to Done', async ()=>{
+      const entries = [];
+      for(let i=0;i<meats.length;i++){
+        const qtyEl = prodActionBodyEl.querySelector('.meat-qty[data-idx="'+i+'"]');
+        const staff = prodActionBodyEl.querySelector('.meat-staff[data-idx="'+i+'"]');
+        const dispose = prodActionBodyEl.querySelector('.meat-dispose[data-idx="'+i+'"]');
+        const qty = parseFloat(qtyEl && qtyEl.value) || 0;
+        if(qty <= 0) continue;
+        if(staff.checked === dispose.checked){
+          prodActionMsgEl.textContent = 'For ' + meats[i].name + ', pick exactly one: staff meal or dispose.';
+          prodActionMsgEl.className = 'form-msg err';
+          return;
+        }
+        entries.push({ meat: meats[i], qty, mode: staff.checked ? 'staff' : 'dispose' });
+      }
+
+      entries.forEach(en=>{
+        if(en.mode === 'staff'){
+          // Put it back as the RECYCLED version of the same ingredient, e.g.
+          // "Chicken leg fillet" -> "Chicken leg fillet (recycled)".
+          const recName = en.meat.name + ' (recycled)';
+          const recKey = ingredientKey(recName, en.meat.uom);
+          let inv = inventory.find(i => i.key === recKey);
+          if(!inv){
+            const source = inventory.find(i => i.key === ingredientKey(en.meat.name, en.meat.uom));
+            inv = { key: recKey, name: recName, uom: en.meat.uom, stock: 0,
+                    price: source ? (source.price || 0) : 0, rawMeat: false, recycleMeat: true };
+            inventory.push(inv);
+          }
+          const oldQty = inv.stock || 0;
+          inv.stock = oldQty + en.qty;
+          logInventoryChange(inv.name, inv.uom, oldQty, inv.stock,
+            'Meat excess returned as staff meal · Batch #' + (plan.batchNumber || ''));
+        } else {
+          logStockEvent(en.meat.name, en.meat.uom,
+            'DISPOSED ' + en.qty.toLocaleString('en-PH',{maximumFractionDigits:2}) + ' ' + en.meat.uom +
+            ' of meat excess · Batch #' + (plan.batchNumber || ''));
+        }
+      });
+
+      plan.meatExcess = entries.map(en=>({ name: en.meat.name, uom: en.meat.uom, qty: en.qty, mode: en.mode }));
+      plan.validated = true;
+      plan.validatedAt = new Date().toISOString();
+      plan.cookedPax = plan.pax;            // cooked food inventory is counted in pax
+      plan.dispatchedAt = plan.dispatchedAt || '';
+      await persistInventory();
+      await persistPlans();
+      await persistInventoryHistory();
+      closeProdAction();
+      renderProductionList();
+      renderInventoryTable();
+      renderDispatch();
+    });
+  }
+
+  // ---------- Batch stub print ----------
+  function printBatchStub(plan){
+    const lines = planIngredientLines(plan);
+    const body = `
+      <h1>Production Batch Stub</h1>
+      <p class="print-sub">Kitchen Cost Rail · ${escapeHtml(plan.eventName)}</p>
+
+      <table>
+        <tr><th>Batch number</th><td><b style="font-size:17px;">#${escapeHtml(plan.batchNumber || '—')}</b></td></tr>
+        <tr><th>Date of production</th><td><b style="font-size:17px;">${formatDateDisplay(plan.batchDate)}</b></td></tr>
+        <tr><th>Commi in charge</th><td><b>${escapeHtml(plan.commi || '—')}</b></td></tr>
+        <tr><th>Food</th><td>${escapeHtml(plan.recipeName)}</td></tr>
+        <tr><th>Pax / batches</th><td>${plan.pax} pax · ${plan.batches} batch${plan.batches===1?'':'es'}</td></tr>
+        <tr><th>Event place</th><td>${escapeHtml(plan.eventPlace || '—')}</td></tr>
+        <tr><th>Timing</th><td>${plan.startTime ? formatTimeDisplay(plan.startTime) : '—'}${plan.endTime ? ' – ' + formatTimeDisplay(plan.endTime) : ''}</td></tr>
+      </table>
+
+      <p class="section-label">INGREDIENTS RELEASED</p>
+      <table>
+        <thead><tr><th>Ingredient</th><th class="num">Qty</th><th>Checked</th></tr></thead>
+        <tbody>
+          ${lines.map(l=>`<tr>
+            <td>${escapeHtml(l.name)}</td>
+            <td class="num">${l.required.toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(l.uom)}</td>
+            <td>☐</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+
+      <p class="section-label">TO BE FILLED UP BY KITCHEN STAFF AFTER PRODUCTION</p>
+      <table>
+        <thead><tr><th>Raw meat</th><th class="num">Excess (kg)</th><th>Staff meal</th><th>Disposal</th></tr></thead>
+        <tbody>
+          ${(lines.filter(l=>l.rawMeat).length ? lines.filter(l=>l.rawMeat) : [{name:'', uom:''},{name:'', uom:''}])
+            .map(l=>`<tr>
+              <td style="height:30px;">${escapeHtml(l.name || '')}</td>
+              <td class="num"></td><td>☐</td><td>☐</td>
+            </tr>`).join('')}
+          <tr><td style="height:30px;"></td><td class="num"></td><td>☐</td><td>☐</td></tr>
+        </tbody>
+      </table>
+      <p class="section-label">RELEASED BY / RECEIVED BY</p>
+      <table><tr><td style="height:46px;">Released by: ______________________</td>
+      <td style="height:46px;">Received by: ______________________</td></tr></table>`;
+    printSection('Batch Stub #' + (plan.batchNumber || ''), body);
+  }
+
+  // ---------- Dispatching (cooked food inventory) ----------
+  function cookedBatches(){
+    return plans.filter(p => p.validated);
+  }
+
+  function renderDispatch(){
+    const wrap = document.getElementById('dispatchFolders');
+    if(!wrap) return;
+    const done = cookedBatches();
+    if(done.length === 0){
+      wrap.innerHTML = '<div class="kanban-empty">No batch has reached Done yet, so there is no cooked food to dispatch.</div>';
+      document.getElementById('dispatchSummary').innerHTML = '';
+      document.getElementById('commiSummary').innerHTML = '';
+      return;
+    }
+
+    // One folder per event day — the day the production planning is for.
+    const folders = {};
+    done.forEach(p=>{
+      const key = (p.eventDate || 'No event date') + ' · ' + (p.eventName || 'Unnamed event');
+      if(!folders[key]) folders[key] = [];
+      folders[key].push(p);
+    });
+
+    wrap.innerHTML = Object.keys(folders).sort().map((key, idx)=>`
+      <details class="station-group" ${idx === 0 ? 'open' : ''}>
+        <summary>${escapeHtml(key)} <span class="kanban-count">${folders[key].length}</span></summary>
+        <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
+          <thead><tr>
+            <th>Commi in charge</th><th>Food</th><th>Event place</th>
+            <th class="num">Pax</th><th>Date of production</th><th>Dispatch</th>
+          </tr></thead>
+          <tbody>
+            ${folders[key].map(p=>`
+              <tr>
+                <td>${escapeHtml(p.commi || '—')}</td>
+                <td>${escapeHtml(p.recipeName)} <span class="batch-tag">#${escapeHtml(p.batchNumber || '—')}</span></td>
+                <td>${escapeHtml(p.eventPlace || '—')}</td>
+                <td class="num">${p.dispatchedAt ? 0 : (p.cookedPax || p.pax)}</td>
+                <td>${formatDateDisplay(p.batchDate)}</td>
+                <td>${p.dispatchedAt
+                  ? '<b>' + formatDateDisplay(p.dispatchedAt) + '</b>'
+                  : (canValidate()
+                      ? '<button type="button" class="print-btn" data-dispatch="' + p.id + '">Dispatch</button>'
+                      : '—')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </details>`).join('');
+
+    wrap.querySelectorAll('[data-dispatch]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const plan = plans.find(p => p.id === btn.dataset.dispatch);
+        if(plan) openDispatchPrompt(plan);
+      });
+    });
+
+    renderDispatchSummary();
+    renderCommiSummary();
+  }
+
+  function openDispatchPrompt(plan){
+    const body = `
+      <p class="recipe-hint">Batch #${escapeHtml(plan.batchNumber || '—')} · ${escapeHtml(plan.recipeName)} ·
+      ${plan.cookedPax || plan.pax} pax</p>
+      <p style="font-size:12.5px;line-height:1.5;">
+        Pick the date this food is dispatched. Once confirmed, its pax leave the cooked food inventory
+        and this row can no longer be dispatched again.
+      </p>
+      <label for="dispatchDateInput">Dispatch date</label>
+      <input type="date" id="dispatchDateInput" value="${escapeHtml(plan.eventDate || '')}">`;
+    openProdAction('Dispatch cooked food', body, 'Confirm dispatch', async ()=>{
+      const d = document.getElementById('dispatchDateInput').value;
+      if(!d){
+        prodActionMsgEl.textContent = 'Pick the dispatch date first.';
+        prodActionMsgEl.className = 'form-msg err';
+        return;
+      }
+      plan.dispatchedAt = d;
+      plan.dispatchedPax = plan.cookedPax || plan.pax;
+      await persistPlans();
+      closeProdAction();
+      renderDispatch();
+    });
+  }
+
+  function recipeCategoryOf(plan){
+    const r = recipes.find(x => x.id === plan.recipeId);
+    return (r && r.category) ? r.category : 'Uncategorized';
+  }
+
+  function renderDispatchSummary(){
+    const el = document.getElementById('dispatchSummary');
+    const groups = {};
+    cookedBatches().forEach(p=>{
+      const cat = recipeCategoryOf(p);
+      const food = p.recipeName;
+      if(!groups[cat]) groups[cat] = {};
+      if(!groups[cat][food]) groups[cat][food] = { inPax: 0, outPax: 0 };
+      groups[cat][food].inPax += (p.cookedPax || p.pax || 0);
+      if(p.dispatchedAt) groups[cat][food].outPax += (p.dispatchedPax || p.cookedPax || p.pax || 0);
+    });
+    const cats = Object.keys(groups).sort();
+    if(cats.length === 0){ el.innerHTML = ''; return; }
+    el.innerHTML = cats.map(cat=>`
+      <details class="station-group" open>
+        <summary>${escapeHtml(cat)}</summary>
+        <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
+          <thead><tr><th>Food</th><th class="num">In (pax)</th><th class="num">Out (pax)</th><th class="num">On hand (pax)</th></tr></thead>
+          <tbody>
+            ${Object.keys(groups[cat]).sort().map(food=>{
+              const g = groups[cat][food];
+              return `<tr>
+                <td>${escapeHtml(food)}</td>
+                <td class="num">${g.inPax}</td>
+                <td class="num">${g.outPax}</td>
+                <td class="num"><b>${g.inPax - g.outPax}</b></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </details>`).join('');
+  }
+
+  function renderCommiSummary(){
+    const el = document.getElementById('commiSummary');
+    const byCommi = {};
+    plans.forEach(p=>{
+      const c = p.commi || 'Unassigned';
+      if(!byCommi[c]) byCommi[c] = { batches: 0, foods: {} };
+      byCommi[c].batches += 1;
+      byCommi[c].foods[p.recipeName] = (byCommi[c].foods[p.recipeName] || 0) + (p.pax || 0);
+    });
+    const names = Object.keys(byCommi).sort();
+    if(names.length === 0){ el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
+        <thead><tr><th>Commi in charge</th><th class="num">Batches</th><th>Foods made (pax)</th></tr></thead>
+        <tbody>
+          ${names.map(n=>`<tr>
+            <td>${escapeHtml(n)}</td>
+            <td class="num">${byCommi[n].batches}</td>
+            <td>${Object.keys(byCommi[n].foods).sort().map(f=>escapeHtml(f) + ' (' + byCommi[n].foods[f] + ')').join(', ')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  document.getElementById('printDispatchBtn').addEventListener('click', ()=>{
+    const done = cookedBatches();
+    const body = `
+      <h1>Dispatch Board — Cooked Food Inventory</h1>
+      <p class="print-sub">Strictly on a pax basis, not a kg basis.</p>
+      <table>
+        <thead><tr><th>Event / day</th><th>Commi</th><th>Food</th><th>Place</th><th class="num">Pax</th><th>Produced</th><th>Dispatched</th></tr></thead>
+        <tbody>
+          ${done.map(p=>`<tr>
+            <td>${escapeHtml((p.eventDate || '') + ' ' + p.eventName)}</td>
+            <td>${escapeHtml(p.commi || '—')}</td>
+            <td>${escapeHtml(p.recipeName)}</td>
+            <td>${escapeHtml(p.eventPlace || '—')}</td>
+            <td class="num">${p.cookedPax || p.pax}</td>
+            <td>${formatDateDisplay(p.batchDate)}</td>
+            <td>${p.dispatchedAt ? formatDateDisplay(p.dispatchedAt) : '☐'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    printSection('Dispatch Board', body);
+  });
+
+
+  // =====================================================================
+  // CALENDAR MODULE
+  //   Same process as the standalone food-tasting schedule, but stored in
+  //   the shared Google Sheet (kv_store key "calendar_events") instead of
+  //   this device, so the whole team sees the same board.
+  //   Yellow = food tasting · Blue = event · Red = production schedule
+  //   (red entries are generated from released production batches, so they
+  //   are never edited here).
+  // =====================================================================
+  const CAL_KEY = 'calendar_events';
+  let calEvents = [];
+  let calCursor = new Date();
+  let calEditingId = null;
+
+  const MONTH_NAMES = ['January','February','March','April','May','June',
+    'July','August','September','October','November','December'];
+
+  function calPad(n){ return String(n).padStart(2,'0'); }
+  function calIso(y,m,d){ return y + '-' + calPad(m+1) + '-' + calPad(d); }
+  function calTodayIso(){ const t = new Date(); return calIso(t.getFullYear(), t.getMonth(), t.getDate()); }
+
+  async function loadCalendarEvents(){
+    try{
+      const res = await gasCall('get', { key: CAL_KEY });
+      calEvents = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){ calEvents = []; }
+    if(!Array.isArray(calEvents)) calEvents = [];
+  }
+  async function persistCalendarEvents(){
+    try{ await gasCall('set', { key: CAL_KEY, value: JSON.stringify(calEvents) }); }
+    catch(e){ console.warn('Calendar save failed', e); }
+  }
+
+  // Red entries: one per released production batch, built live from plans.
+  function calProductionEntries(){
+    return plans.filter(p => p.released && p.batchDate).map(p => ({
+      id: 'prod-' + p.id,
+      date: p.batchDate,
+      kind: 'prod',
+      title: 'Batch #' + (p.batchNumber || '—') + ' · ' + p.recipeName,
+      planId: p.id
+    }));
+  }
+
+  function calAllEntries(){
+    const saved = calEvents.map(e => ({
+      id: e.id,
+      date: e.date,
+      kind: e.isTasting ? 'tasting' : 'event',
+      title: e.venue,
+      person: e.person || ''
+    }));
+    return saved.concat(calProductionEntries());
+  }
+
+  function calCellInfo(index, year, month){
+    const firstDow = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const daysInPrev = new Date(year, month, 0).getDate();
+    const offset = index - firstDow + 1;
+    if(offset < 1){
+      const d = daysInPrev + offset;
+      const m = month === 0 ? 11 : month - 1;
+      const y = month === 0 ? year - 1 : year;
+      return { date: d, iso: calIso(y,m,d), out: true };
+    }
+    if(offset > daysInMonth){
+      const d = offset - daysInMonth;
+      const m = month === 11 ? 0 : month + 1;
+      const y = month === 11 ? year + 1 : year;
+      return { date: d, iso: calIso(y,m,d), out: true };
+    }
+    return { date: offset, iso: calIso(year,month,offset), out: false };
+  }
+
+  function renderCalendar(){
+    const grid = document.getElementById('calGrid');
+    if(!grid) return;
+    const year = calCursor.getFullYear();
+    const month = calCursor.getMonth();
+    document.getElementById('calMonthLabel').textContent = MONTH_NAMES[month] + ' ' + year;
+
+    const entries = calAllEntries();
+    const firstDow = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
+    const today = calTodayIso();
+
+    let html = '';
+    for(let i=0;i<totalCells;i++){
+      const info = calCellInfo(i, year, month);
+      const dayEntries = entries.filter(e => e.date === info.iso);
+      html += `
+        <div class="cal-cell ${info.out ? 'out' : ''} ${info.iso === today ? 'today' : ''}">
+          <div class="cal-daynum">${info.date}</div>
+          ${dayEntries.map(e=>`
+            <div class="cal-chip ${e.kind}" data-cal-id="${escapeHtml(e.id)}" title="${escapeHtml(e.title)}">
+              ${escapeHtml(e.title)}
+            </div>`).join('')}
+          ${canEdit() ? `<button type="button" class="cal-addbtn" data-cal-add="${info.iso}">+ Add</button>` : ''}
+        </div>`;
+    }
+    grid.innerHTML = html;
+
+    grid.querySelectorAll('[data-cal-id]').forEach(chip=>{
+      chip.addEventListener('click', ()=> openCalendarEntry(chip.dataset.calId));
+    });
+    grid.querySelectorAll('[data-cal-add]').forEach(btn=>{
+      btn.addEventListener('click', ()=> openCalendarForm(null, btn.dataset.calAdd));
+    });
+
+    renderCalendarDueNotice();
+  }
+
+  // Notification for anything due today or in the next 3 days.
+  function renderCalendarDueNotice(){
+    const box = document.getElementById('calDueBox');
+    if(!box) return;
+    const today = new Date(calTodayIso() + 'T00:00:00');
+    const horizon = new Date(today.getTime() + 3*24*60*60*1000);
+    const due = calAllEntries().filter(e=>{
+      const d = new Date(e.date + 'T00:00:00');
+      return !isNaN(d) && d >= today && d <= horizon;
+    }).sort((a,b)=> a.date.localeCompare(b.date));
+    if(due.length === 0){ box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = '<b>🔔 Due in the next 3 days</b><br>' + due.map(e=>{
+      const label = e.kind === 'prod' ? 'Production' : (e.kind === 'tasting' ? 'Food tasting' : 'Event');
+      return formatDateDisplay(e.date) + ' — ' + label + ': ' + escapeHtml(e.title);
+    }).join('<br>');
+  }
+
+  // ---------- Calendar modal ----------
+  const calOverlay = document.getElementById('calOverlay');
+  const calModalBody = document.getElementById('calModalBody');
+  const calFormMsg = document.getElementById('calFormMsg');
+  const calSaveBtn = document.getElementById('calSaveBtn');
+  const calDeleteBtn = document.getElementById('calDeleteBtn');
+
+  function closeCalModal(){
+    calOverlay.style.display = 'none';
+    calModalBody.innerHTML = '';
+    calEditingId = null;
+  }
+  document.getElementById('calCloseBtn').addEventListener('click', closeCalModal);
+
+  function openCalendarForm(id, prefillDate){
+    if(!canEdit()) return;
+    const ev = id ? calEvents.find(e => e.id === id) : null;
+    calEditingId = id;
+    document.getElementById('calModalTitle').textContent = ev ? 'Edit entry' : 'Add entry';
+    calModalBody.innerHTML = `
+      <div>
+        <label for="calDate">Date</label>
+        <input type="date" id="calDate" value="${escapeHtml(ev ? ev.date : (prefillDate || calTodayIso()))}">
+      </div>
+      <div style="margin-top:10px;">
+        <label for="calVenue">Venue / event name</label>
+        <input type="text" id="calVenue" placeholder="e.g. Narra Hill" value="${escapeHtml(ev ? ev.venue : '')}">
+      </div>
+      <div style="margin-top:10px;">
+        <label for="calPerson">Person in charge</label>
+        <input type="text" id="calPerson" placeholder="e.g. Jelay" value="${escapeHtml(ev ? (ev.person || '') : '')}">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin-top:12px;">
+        <input type="checkbox" id="calTasting" style="width:auto;margin:0;" ${ev && ev.isTasting ? 'checked' : ''}>
+        This is a food tasting (yellow). Leave unticked for an event (blue).
+      </label>`;
+    calFormMsg.textContent = '';
+    calFormMsg.className = 'form-msg';
+    calSaveBtn.style.display = 'block';
+    calDeleteBtn.style.display = (ev && canDelete()) ? 'block' : 'none';
+    calOverlay.style.display = 'flex';
+  }
+
+  calSaveBtn.addEventListener('click', async ()=>{
+    if(calSaveBtn.disabled) return;
+    const date = document.getElementById('calDate').value;
+    const venue = document.getElementById('calVenue').value.trim();
+    const person = document.getElementById('calPerson').value.trim();
+    const isTasting = document.getElementById('calTasting').checked;
+    if(!date || !venue){
+      calFormMsg.textContent = 'Add a date and a venue / event name.';
+      calFormMsg.className = 'form-msg err';
+      return;
+    }
+    calSaveBtn.disabled = true;
+    const label = calSaveBtn.textContent;
+    calSaveBtn.textContent = 'Saving…';
+    try{
+      if(calEditingId){
+        const ev = calEvents.find(e => e.id === calEditingId);
+        if(ev){ ev.date = date; ev.venue = venue; ev.person = person; ev.isTasting = isTasting; }
+      } else {
+        calEvents.push({ id: 'e' + Date.now() + Math.random().toString(16).slice(2),
+          date, venue, person, isTasting });
+      }
+      await withMinDelay(persistCalendarEvents(), 400);
+      closeCalModal();
+      renderCalendar();
+    } finally {
+      calSaveBtn.disabled = false;
+      calSaveBtn.textContent = label;
+    }
+  });
+
+  calDeleteBtn.addEventListener('click', async ()=>{
+    if(!calEditingId || !canDelete()) return;
+    calEvents = calEvents.filter(e => e.id !== calEditingId);
+    await persistCalendarEvents();
+    closeCalModal();
+    renderCalendar();
+  });
+
+  // Clicking a chip: production batches open a read-only summary (the batch
+  // stub without the ingredient list and without the total amount); tasting
+  // and event chips open the same edit form as the original HTML.
+  function openCalendarEntry(id){
+    if(String(id).indexOf('prod-') === 0){
+      const plan = plans.find(p => ('prod-' + p.id) === id);
+      if(!plan) return;
+      document.getElementById('calModalTitle').textContent = 'Production schedule';
+      calModalBody.innerHTML = `
+        <p class="recipe-hint">Released ${plan.releasedAt ? formatDateDisplay(plan.releasedAt.slice(0,10)) : '—'}</p>
+        <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
+          <tr><th style="text-align:left;">Batch number</th><td><b>#${escapeHtml(plan.batchNumber || '—')}</b></td></tr>
+          <tr><th style="text-align:left;">Date of production</th><td><b>${formatDateDisplay(plan.batchDate)}</b></td></tr>
+          <tr><th style="text-align:left;">Commi in charge</th><td>${escapeHtml(plan.commi || '—')}</td></tr>
+          <tr><th style="text-align:left;">Food</th><td>${escapeHtml(plan.recipeName)}</td></tr>
+          <tr><th style="text-align:left;">Production category</th><td>${escapeHtml(plan.category || '—')}</td></tr>
+          <tr><th style="text-align:left;">Pax / batches</th><td>${plan.pax} pax · ${plan.batches} batch${plan.batches===1?'':'es'}</td></tr>
+          <tr><th style="text-align:left;">Event</th><td>${escapeHtml(plan.eventName)}${plan.eventDate ? ' · ' + formatDateDisplay(plan.eventDate) : ''}</td></tr>
+          <tr><th style="text-align:left;">Event place</th><td>${escapeHtml(plan.eventPlace || '—')}</td></tr>
+          <tr><th style="text-align:left;">Timing</th><td>${plan.startTime ? formatTimeDisplay(plan.startTime) : '—'}${plan.endTime ? ' – ' + formatTimeDisplay(plan.endTime) : ''}</td></tr>
+          <tr><th style="text-align:left;">Status</th><td>${plan.validated ? 'Done' : 'Processing (GO)'}</td></tr>
+        </table>`;
+      calFormMsg.textContent = '';
+      calSaveBtn.style.display = 'none';
+      calDeleteBtn.style.display = 'none';
+      calOverlay.style.display = 'flex';
+      return;
+    }
+    openCalendarForm(id);
+  }
+
+  document.getElementById('calPrevBtn').addEventListener('click', ()=>{
+    calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth()-1, 1);
+    renderCalendar();
+  });
+  document.getElementById('calNextBtn').addEventListener('click', ()=>{
+    calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth()+1, 1);
+    renderCalendar();
+  });
+  document.getElementById('calNewBtn').addEventListener('click', ()=> openCalendarForm(null, calTodayIso()));
+
+  document.getElementById('calPrintBtn').addEventListener('click', ()=>{
+    const year = calCursor.getFullYear(), month = calCursor.getMonth();
+    const entries = calAllEntries()
+      .filter(e => e.date.slice(0,7) === year + '-' + calPad(month+1))
+      .sort((a,b)=> a.date.localeCompare(b.date));
+    const body = `
+      <h1>Calendar — ${MONTH_NAMES[month]} ${year}</h1>
+      <p class="print-sub">Yellow = food tasting · Blue = event · Red = production schedule</p>
+      <table>
+        <thead><tr><th>Date</th><th>Type</th><th>Details</th></tr></thead>
+        <tbody>
+          ${entries.length === 0 ? '<tr><td colspan="3">Nothing scheduled this month.</td></tr>' :
+            entries.map(e=>`<tr>
+              <td>${formatDateDisplay(e.date)}</td>
+              <td>${e.kind === 'prod' ? 'Production' : (e.kind === 'tasting' ? 'Food tasting' : 'Event')}</td>
+              <td>${escapeHtml(e.title)}${e.person ? ' · ' + escapeHtml(e.person) : ''}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    printSection('Calendar ' + MONTH_NAMES[month] + ' ' + year, body);
+  });
 
   // ---------- Tab: Package Cost Calculator ----------
   const MARKUP = 3;
@@ -4183,6 +5584,8 @@ function initApp(){
     addFoodRow();
     addPkgRow(pkgMiscRowsEl,'misc');
     setServiceRowsData([]);
+    document.getElementById('pkgVatRate').value = 12;
+    document.getElementById('pkgPackageCostInput').value = '';
     updatePackageSummary();
   }
 
@@ -4205,6 +5608,11 @@ function initApp(){
     if(pkgFoodRowsEl.children.length === 0) addFoodRow();
     if(pkgMiscRowsEl.children.length === 0) addPkgRow(pkgMiscRowsEl,'misc');
     setServiceRowsData(pkg.serviceItems || []);
+    // Restore this package's own VAT rate / standard price so the price
+    // structure chart picks up right where it was left, instead of whatever
+    // was last typed for a different package.
+    document.getElementById('pkgVatRate').value = (pkg.vatRate !== undefined && pkg.vatRate !== null) ? pkg.vatRate : 12;
+    document.getElementById('pkgPackageCostInput').value = pkg.standardPackagePrice || '';
     updatePackageSummary();
 
     editingPkgBanner.style.display = 'flex';
@@ -4267,6 +5675,10 @@ function initApp(){
     const rawFoodTotal = foodSubtotal * paxMultiplier;
     const grandTotal = foodChargedTotal + serviceTotal + miscTotal;
     const pricePerPax = pax > 0 ? (foodCharged + (serviceTotal + miscTotal) / pax) : (foodCharged + serviceTotal + miscTotal);
+    // Saved alongside the totals so the "View" modal and print can rebuild
+    // the price-structure chart later without needing the live form inputs.
+    const vatRate = parseFloat(document.getElementById('pkgVatRate').value) || 0;
+    const standardPackagePrice = parseFloat(document.getElementById('pkgPackageCostInput').value) || 0;
 
     if(editingPkgId){
       const idx = packages.findIndex(p => p.id === editingPkgId);
@@ -4275,6 +5687,7 @@ function initApp(){
           ...packages[idx],
           soNumber, name, pax, foodItems, serviceItems, miscItems,
           foodSubtotal, foodCharged, foodChargedTotal, serviceTotal, rawFoodTotal, miscTotal, grandTotal, pricePerPax,
+          vatRate, standardPackagePrice,
           updatedAt: new Date().toISOString()
         };
       }
@@ -4289,6 +5702,7 @@ function initApp(){
         id: 'pkg-' + Date.now(),
         soNumber, name, pax, foodItems, serviceItems, miscItems,
         foodSubtotal, foodCharged, foodChargedTotal, serviceTotal, rawFoodTotal, miscTotal, grandTotal, pricePerPax,
+        vatRate, standardPackagePrice,
         savedAt: new Date().toISOString()
       };
       packages.unshift(pkg);
@@ -4419,6 +5833,8 @@ function initApp(){
       'saveProdBtn',
       'savePkgBtn','addPkgFoodBtn','addPkgServiceExtraBtn','addPkgMiscBtn'
     ].forEach(id => gateEl(document.getElementById(id), canCreate(), creationDisabledMsg));
+
+    gateEl(document.getElementById('openInsertIngredientBtn'), canEdit(), 'Only Admin and Manager can add new ingredients to inventory.');
 
     // Recipe name/category/yield + ingredient rows, production form, package form inputs
     if(!canCreate()){
@@ -4565,15 +5981,19 @@ function initApp(){
         <div><span class="acct-name">Admin</span><span class="acct-meta">username: admin · Level 1 — full access</span></div>
         <span class="acct-meta">Always enabled</span>
       </div>
-      ${['chef1','chef2'].map((u,idx) => `
+      ${['chef1','chef2'].map((u) => {
+        const acct = FIXED_ACCOUNTS[u];
+        const levelLabel = acct.role === 'manager' ? 'Level 2 — Manager' : 'Level 3 — Assistant';
+        return `
         <div class="access-account-row">
-          <div><span class="acct-name">${FIXED_ACCOUNTS[u].label}</span><span class="acct-meta">username: ${u} · Level 2 — Manager</span></div>
+          <div><span class="acct-name">${acct.label}</span><span class="acct-meta">username: ${u} · ${levelLabel}</span></div>
           <label class="toggle-switch">
             <input type="checkbox" data-account="${u}" ${managerAccountEnabled[u] !== false ? 'checked' : ''}>
             <span class="toggle-slider"></span>
           </label>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     `;
     wrap.querySelectorAll('input[data-account]').forEach(input=>{
       input.addEventListener('change', async (e)=>{
@@ -4618,6 +6038,9 @@ function initApp(){
     await loadInventoryHistory();
     await syncProductionCommitments();
     renderProductionList();
+    renderDispatch();
+    await loadCalendarEvents();
+    renderCalendar();
     applyStaticAccessControl();
 
     // Keep every open browser fresh even if nobody on it saves anything:
@@ -4676,10 +6099,12 @@ window.storage = {
   }
 };
 
-// ---------- Access levels (3 fixed accounts) ----------
-// Admin   (username "admin", password "admin1"):  full access, incl. Master Archive & Manage Access
-// Manager (username "chef1"/"chef2", password matches username): create, edit, validate — no delete, no access management
-// Viewer  (anyone without a matching login):        view only, incl. the new "View" buttons — no create, edit, delete, validate, or stock changes
+// ---------- Access levels (4 fixed accounts) ----------
+// Admin     (username "admin", password "admin1"):  full access, incl. Master Archive & Manage Access.
+// Manager   (username "chef1", password "chef1"):    create, edit, and release/validate — no delete, no access management, no Master Archive.
+// Assistant (username "chef2", password "chef2"):    views everything, plus can release/validate items for
+//           inventory (aside from Admin and Chef 1) — no create, no edit, no delete, no access management.
+// Viewer    (anyone without a matching login):        view + print only — no create, edit, delete, validate, or stock changes.
 let currentRole = 'viewer';
 let currentUser = '';
 let currentAccountId = null; // 'admin' | 'chef1' | 'chef2' | null (viewer)
@@ -4687,9 +6112,9 @@ let currentAccountId = null; // 'admin' | 'chef1' | 'chef2' | null (viewer)
 const FIXED_ACCOUNTS = {
   admin: { password: 'admin1', role: 'admin', label: 'Admin' },
   chef1: { password: 'chef1',  role: 'manager', label: 'Head Chef 1' },
-  chef2: { password: 'chef2',  role: 'manager', label: 'Head Chef 2' }
+  chef2: { password: 'chef2',  role: 'assistant', label: 'Assistant' }
 };
-// Admin can disable a manager account from the "Manage Access" panel — a
+// Admin can disable the Chef 1 or Chef 2 account from the "Manage Access" panel — a
 // disabled account falls back to Viewer even with the right password.
 let managerAccountEnabled = { chef1: true, chef2: true };
 const ACCESS_ACCOUNTS_KEY = 'kitchen-access-accounts';
@@ -4705,11 +6130,14 @@ async function persistAccessAccounts(){
   catch(e){ console.error('Storage error', e); }
 }
 
-const ROLE_LABELS = { admin:'Level 1 — Admin', manager:'Level 2 — Manager', viewer:'Level 3 — Viewer' };
-function canCreate(){ return currentRole !== 'viewer'; }
-function canEdit(){ return currentRole !== 'viewer'; }
+const ROLE_LABELS = { admin:'Level 1 — Admin', manager:'Level 2 — Manager', assistant:'Level 3 — Assistant', viewer:'Level 4 — Viewer' };
+// Create/edit stays Admin + Manager (chef1) only — Assistant (chef2) is view +
+// release/validate only, per the Access Level revision.
+function canCreate(){ return currentRole === 'admin' || currentRole === 'manager'; }
+function canEdit(){ return currentRole === 'admin' || currentRole === 'manager'; }
 function canDelete(){ return currentRole === 'admin'; }
-function canValidate(){ return currentRole === 'admin' || currentRole === 'manager'; }
+// Release/validate: Admin, Manager (chef1), and now Assistant (chef2) can all do this.
+function canValidate(){ return currentRole === 'admin' || currentRole === 'manager' || currentRole === 'assistant'; }
 function canManageAccess(){ return currentRole === 'admin'; }
 
 function updateRoleDesc(){
@@ -4717,17 +6145,19 @@ function updateRoleDesc(){
   const p = document.getElementById('loginPassword').value || '';
   const acct = FIXED_ACCOUNTS[u];
   if(!u && !p){
-    roleDescEl.textContent = 'No login? You\'ll enter as Level 3 — Viewer (read-only).';
+    roleDescEl.textContent = 'No login? You\'ll enter as Level 4 — Viewer (read-only).';
   } else if(acct && acct.password === p){
-    if(acct.role === 'manager' && managerAccountEnabled[u] === false){
-      roleDescEl.textContent = 'This manager account has been disabled by the Admin — you\'ll enter as Viewer.';
+    if((acct.role === 'manager' || acct.role === 'assistant') && managerAccountEnabled[u] === false){
+      roleDescEl.textContent = 'This account has been disabled by the Admin — you\'ll enter as Viewer.';
+    } else if(acct.role === 'admin'){
+      roleDescEl.textContent = 'Level 1 — Admin: full access, incl. Master Archive & Manage Access.';
+    } else if(acct.role === 'manager'){
+      roleDescEl.textContent = 'Level 2 — Manager (' + acct.label + '): create, edit, and release/validate. No delete, no access management.';
     } else {
-      roleDescEl.textContent = acct.role === 'admin'
-        ? 'Level 1 — Admin: full access, incl. Master Archive & Manage Access.'
-        : 'Level 2 — Manager (' + acct.label + '): create, edit, and validate. No delete, no access management.';
+      roleDescEl.textContent = 'Level 3 — Assistant (' + acct.label + '): views everything, plus release/validate for inventory. No create, edit, or delete.';
     }
   } else {
-    roleDescEl.textContent = 'Username/password not recognized — you\'ll enter as Level 3 — Viewer.';
+    roleDescEl.textContent = 'Username/password not recognized — you\'ll enter as Level 4 — Viewer.';
   }
 }
 const roleDescEl = document.getElementById('roleDesc');
