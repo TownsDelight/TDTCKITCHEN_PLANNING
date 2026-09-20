@@ -1685,6 +1685,15 @@
         <input type="checkbox" id="archiveKeepActive" checked style="width:auto;margin:3px 0 0;"> Keep unfinished batches and cooked food not yet dispatched (recommended)
       </label>
       <label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;margin-top:8px;">
+        <input type="checkbox" id="archiveResetDisp" style="width:auto;margin:3px 0 0;"> Reset Dispatching only (cooked food inventory, in/out summary and assigned commi)
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;margin:6px 0 0 26px;">
+        <input type="checkbox" id="archiveKeepCooked" checked style="width:auto;margin:3px 0 0;"> Keep cooked food not yet dispatched (recommended)
+      </label>
+      <div style="font-size:11.5px;color:#6B6F66;margin:4px 0 0 26px;">
+        Production Planning batches stay as they are. (Resetting Production Planning above also removes its batches from Dispatching.)
+      </div>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;margin-top:8px;">
         <input type="checkbox" id="archiveResetPkg" style="width:auto;margin:3px 0 0;"> Reset Saved Packages
       </label>
       <div style="font-size:11.5px;color:#6B6F66;margin-top:8px;">
@@ -4908,8 +4917,10 @@ function initApp(){
   }
 
   // ---------- Dispatching (cooked food inventory) ----------
+  // Records cleared by the Master Archive "Reset Dispatching" option are
+  // hidden here (the batches themselves stay in Production Planning).
   function cookedBatches(){
-    return plans.filter(p => p.validated);
+    return plans.filter(p => p.validated && !p.dispatchCleared);
   }
 
   function renderDispatch(){
@@ -4917,9 +4928,9 @@ function initApp(){
     if(!wrap) return;
     const done = cookedBatches();
     if(done.length === 0){
-      wrap.innerHTML = '<div class="kanban-empty">No batch has reached Done yet, so there is no cooked food to dispatch.</div>';
+      wrap.innerHTML = '<div class="kanban-empty">No cooked food to dispatch right now — batches appear here when they reach Done.</div>';
       document.getElementById('dispatchSummary').innerHTML = '';
-      document.getElementById('commiSummary').innerHTML = '';
+      renderCommiSummary();
       return;
     }
 
@@ -5033,7 +5044,7 @@ function initApp(){
   function renderCommiSummary(){
     const el = document.getElementById('commiSummary');
     const byCommi = {};
-    plans.forEach(p=>{
+    plans.filter(p => !p.dispatchCleared).forEach(p=>{
       const c = p.commi || 'Unassigned';
       if(!byCommi[c]) byCommi[c] = { batches: 0, foods: {} };
       byCommi[c].batches += 1;
@@ -6107,6 +6118,33 @@ function initApp(){
       'Meat Excess': (p.meatExcess||[]).map(m => m.name + ' ' + m.qty + ' ' + m.uom + ' (' + (m.mode==='staff'?'staff meal':'disposed') + ')').join('; ')
     })), 'No production plans saved', 'Production Plans');
 
+    const cooked = (d.plans||[]).filter(p => p.validated && !p.dispatchCleared);
+    const catOf = p => { const r = (d.recipes||[]).find(x => x.id === p.recipeId); return (r && r.category) || 'Uncategorized'; };
+    add(cooked.map(p => ({
+      'Event Day': p.eventDate||'', 'Event': p.eventName, 'Commi in charge': p.commi||'', 'Food': p.recipeName,
+      'Batch #': p.batchNumber, 'Category': catOf(p), 'Pax cooked (in)': p.cookedPax||p.pax,
+      'Date of production': p.batchDate, 'Dispatch date': p.dispatchedAt||'',
+      'Pax dispatched (out)': p.dispatchedAt ? (p.dispatchedPax||p.cookedPax||p.pax) : 0,
+      'On hand (pax)': p.dispatchedAt ? 0 : (p.cookedPax||p.pax)
+    })), 'No cooked food records', 'Dispatching');
+    const sum = {};
+    cooked.forEach(p => {
+      const k = catOf(p) + '||' + p.recipeName;
+      if(!sum[k]) sum[k] = { 'Category': catOf(p), 'Food': p.recipeName, 'In (pax)': 0, 'Out (pax)': 0, 'On hand (pax)': 0 };
+      const inn = p.cookedPax||p.pax||0, out = p.dispatchedAt ? (p.dispatchedPax||inn) : 0;
+      sum[k]['In (pax)'] += inn; sum[k]['Out (pax)'] += out; sum[k]['On hand (pax)'] += inn - out;
+    });
+    add(Object.values(sum), 'No dispatch summary', 'Dispatch Summary');
+    const cm = {};
+    (d.plans||[]).filter(p => !p.dispatchCleared).forEach(p => {
+      const c = p.commi || 'Unassigned';
+      if(!cm[c]) cm[c] = { 'Commi in charge': c, 'Batches': 0, 'Foods made (pax)': {} };
+      cm[c]['Batches'] += 1;
+      cm[c]['Foods made (pax)'][p.recipeName] = (cm[c]['Foods made (pax)'][p.recipeName]||0) + (p.pax||0);
+    });
+    add(Object.values(cm).map(x => ({ 'Commi in charge': x['Commi in charge'], 'Batches': x['Batches'],
+      'Foods made (pax)': Object.keys(x['Foods made (pax)']).map(f => f + ' (' + x['Foods made (pax)'][f] + ')').join(', ') })), 'No commi assignments', 'Commi Batches');
+
     add((d.packages||[]).map(p => ({
       'Package': p.name, 'SO#': p.soNumber||'', 'Pax': p.pax||'',
       'Food Charged': p.foodCharged, 'Service Total': p.serviceTotal||0,
@@ -6194,6 +6232,41 @@ function initApp(){
           <details><summary>View package</summary>${archivePackageDetailHtml(pkg)}</details>
         </div>`).join('') : '<div class="empty">No packages were saved in this archive.</div>';
 
+    // Dispatching (cooked food inventory) — same three parts as the live tab
+    const cookedV = plansSorted.filter(p => p.validated && !p.dispatchCleared);
+    const catOfV = p => { const r = recipesById[p.recipeId]; return (r && r.category) || 'Uncategorized'; };
+    const foldersV = {};
+    cookedV.forEach(p => { const k = (p.eventDate || 'No event date') + ' · ' + (p.eventName || 'Unnamed event'); (foldersV[k] = foldersV[k] || []).push(p); });
+    const foldersHtml = Object.keys(foldersV).sort().map(k => `
+      <details open><summary>${escapeHtml(k)} (${foldersV[k].length})</summary>
+        <table><thead><tr><th>Commi in charge</th><th>Food</th><th class="num">Pax</th><th>Date of production</th><th>Dispatch</th></tr></thead><tbody>
+        ${foldersV[k].map(p => `<tr><td>${escapeHtml(p.commi||'—')}</td><td>${escapeHtml(p.recipeName)} <span class="batch">#${escapeHtml(p.batchNumber||'—')}</span></td>
+          <td class="num">${p.dispatchedAt ? 0 : (p.cookedPax||p.pax)}</td><td>${formatDateDisplay(p.batchDate)}</td>
+          <td>${p.dispatchedAt ? formatDateDisplay(p.dispatchedAt) : '—'}</td></tr>`).join('')}
+        </tbody></table></details>`).join('') || '<div class="empty">No cooked food records in this archive.</div>';
+    const sumV = {};
+    cookedV.forEach(p => {
+      const c = catOfV(p); sumV[c] = sumV[c] || {};
+      const g = sumV[c][p.recipeName] = sumV[c][p.recipeName] || { i:0, o:0 };
+      const inn = p.cookedPax||p.pax||0; g.i += inn; if(p.dispatchedAt) g.o += (p.dispatchedPax||inn);
+    });
+    const sumHtml = Object.keys(sumV).sort().map(c => `
+      <details open><summary>${escapeHtml(c)}</summary><table><thead><tr><th>Food</th><th class="num">In (pax)</th><th class="num">Out (pax)</th><th class="num">On hand (pax)</th></tr></thead><tbody>
+      ${Object.keys(sumV[c]).sort().map(f => `<tr><td>${escapeHtml(f)}</td><td class="num">${sumV[c][f].i}</td><td class="num">${sumV[c][f].o}</td><td class="num"><b>${sumV[c][f].i - sumV[c][f].o}</b></td></tr>`).join('')}
+      </tbody></table></details>`).join('') || '<div class="empty">No summary in this archive.</div>';
+    const cmV = {};
+    plansSorted.filter(p => !p.dispatchCleared).forEach(p => {
+      const c = p.commi || 'Unassigned'; cmV[c] = cmV[c] || { n:0, f:{} };
+      cmV[c].n += 1; cmV[c].f[p.recipeName] = (cmV[c].f[p.recipeName]||0) + (p.pax||0);
+    });
+    const cmHtml = Object.keys(cmV).sort().map(c => `<tr><td>${escapeHtml(c)}</td><td class="num">${cmV[c].n}</td><td>${Object.keys(cmV[c].f).sort().map(f => escapeHtml(f) + ' (' + cmV[c].f[f] + ')').join(', ')}</td></tr>`).join('');
+    const dispHtml = `
+      <div class="card"><p class="lbl" style="margin-top:0;">1 · Cooked food inventory — dispatching</p>${foldersHtml}</div>
+      <div class="card"><p class="lbl" style="margin-top:0;">2 · Cooked food in / out summary</p>
+        <p class="meta">Strictly on a pax basis, not a kg basis of food.</p>${sumHtml}</div>
+      <div class="card"><p class="lbl" style="margin-top:0;">3 · Commi head assigned batches</p>
+        ${cmHtml ? `<table><thead><tr><th>Commi in charge</th><th class="num">Batches</th><th>Foods made (pax)</th></tr></thead><tbody>${cmHtml}</tbody></table>` : '<div class="empty">No assignments in this archive.</div>'}</div>`;
+
     const when = new Date(snapshot.createdAt).toLocaleString('en-PH',{month:'long',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
     return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Archive — ${escapeHtml(snapshot.label)}</title>
@@ -6215,7 +6288,7 @@ select{padding:8px;border-radius:4px;margin:0 0 16px;}
 .colhead h3{margin:0;font-size:13px;letter-spacing:.04em;} .count{background:#EDEAE0;border-radius:999px;padding:2px 9px;font-size:12px;}
 .col.hold .colhead{border-color:#B14A2C;color:#8A2E1A;} .col.proc .colhead{border-color:#5C7A5A;color:#3E5A3C;} .col.done .colhead{border-color:#6B6F66;color:#4B4E46;}
 .card{border:1px solid #D8D4C6;border-radius:5px;padding:12px;margin-bottom:10px;background:#FBFAF6;color:#1B1E1A;}
-.pkgcard{max-width:760px;margin-bottom:12px;}
+.pkgcard{max-width:760px;margin-bottom:12px;} #disp .card{max-width:900px;margin-bottom:16px;}
 .batch{background:#1B1E1A;color:#fff;font-size:11px;padding:2px 7px;border-radius:3px;margin-right:6px;font-family:Consolas,monospace;}
 .st{font-size:10.5px;padding:2px 7px;border-radius:3px;margin-right:6px;font-family:Consolas,monospace;font-weight:700;}
 .st.nogo{background:#F4D9D2;color:#8A2E1A;} .st.go{background:#DDE8DA;color:#3E5A3C;} .st.done{background:#E6E3D8;color:#4B4E46;}
@@ -6237,12 +6310,13 @@ td.num,th.num{text-align:right;white-space:nowrap;}
 <div class="bar"><div><h1>Kitchen Cost Rail — Archive<span class="badge">READ-ONLY</span></h1>
 <div class="sub">${escapeHtml(snapshot.label)} · saved ${escapeHtml(when)} · by ${escapeHtml(snapshot.createdBy||'—')}</div></div>
 <button class="pbtn" onclick="window.print()">🖨 Print</button></div>
-<div class="tabs"><button class="tab active" data-t="prod">Production Planning</button><button class="tab" data-t="pkg">Package Cost Calculator</button></div>
+<div class="tabs"><button class="tab active" data-t="prod">Production Planning</button><button class="tab" data-t="pkg">Package Cost Calculator</button><button class="tab" data-t="disp">Dispatching</button></div>
 <section class="pane active" id="prod">
   <select id="catFilter"><option value="">All categories</option>${cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('')}</select>
   <div class="board">${col('HOLD (NO-GO)','hold',hold)}${col('PROCESSING (GO)','proc',proc)}${col('DONE','done',done)}</div>
 </section>
 <section class="pane" id="pkg">${pkgHtml}</section>
+<section class="pane" id="disp">${dispHtml}</section>
 </div>
 <script>
 document.querySelectorAll('.tab').forEach(function(b){b.onclick=function(){
@@ -6330,6 +6404,18 @@ document.getElementById('catFilter').onchange=function(e){var v=e.target.value;
       await persistPlans();
       await syncProductionCommitments();
     }
+    if(opts.disp){
+      // Hide (not delete) the cooked-food records: the batches stay in Production Planning.
+      const now = new Date().toISOString();
+      plans.forEach(p=>{
+        if(p.validated && !p.dispatchCleared && (!opts.keepCooked || p.dispatchedAt)){
+          p.dispatchCleared = true; p.dispatchClearedAt = now;
+        }
+      });
+      // "Assigned commi" also clears for batches that were still open when the
+      // month closed only once they finish — so nothing active loses its commi.
+      await persistPlans();
+    }
     if(opts.pkgs){
       packages = [];
       await persistPackages();
@@ -6350,10 +6436,13 @@ document.getElementById('catFilter').onchange=function(e){var v=e.target.value;
     const resetProd = document.getElementById('archiveResetProd').checked;
     const keepActive = document.getElementById('archiveKeepActive').checked;
     const resetPkg = document.getElementById('archiveResetPkg').checked;
+    const resetDisp = document.getElementById('archiveResetDisp').checked;
+    const keepCooked = document.getElementById('archiveKeepCooked').checked;
     msgEl.className = 'form-msg'; msgEl.textContent = '';
 
-    if(resetProd || resetPkg){
+    if(resetProd || resetPkg || resetDisp){
       const what = [resetProd ? (keepActive ? 'finished & dispatched production batches' : 'ALL production planning data') : '',
+                    resetDisp ? (keepCooked ? 'dispatched cooked-food records, their summary and commi assignments (Dispatching)' : 'ALL cooked-food records, the summary and commi assignments (Dispatching)') : '',
                     resetPkg ? 'all saved packages' : ''].filter(Boolean).join(' and ');
       if(!window.confirm('After the archive is saved and downloaded, ' + what + ' will be cleared for the new month.\\n\\nThe archive stays available under Previous archives. The Calendar is not affected.\\n\\nContinue?')) return;
     }
@@ -6371,7 +6460,7 @@ document.getElementById('catFilter').onchange=function(e){var v=e.target.value;
         masterArchives.unshift({
           id, label, createdAt: new Date().toISOString(), createdBy: currentUser || 'Unnamed user',
           chunks, counts: { plans: data.plans.length, packages: data.packages.length },
-          resetApplied: { production: resetProd, packages: resetPkg }
+          resetApplied: { production: resetProd, dispatching: resetDisp, packages: resetPkg }
         });
         await persistMasterArchives();
       }catch(e){
@@ -6381,11 +6470,12 @@ document.getElementById('catFilter').onchange=function(e){var v=e.target.value;
       }
       const snap = Object.assign({}, masterArchives[0], { data });
       exportArchiveToExcel(snap);
-      if(resetProd || resetPkg) await resetAfterArchive({ prod: resetProd, keepActive, pkgs: resetPkg });
-      msgEl.textContent = '✓ Archive saved and downloaded' + ((resetProd || resetPkg) ? ' — the selected data has been reset for the new month.' : '.');
+      if(resetProd || resetPkg || resetDisp) await resetAfterArchive({ prod: resetProd, keepActive, pkgs: resetPkg, disp: resetDisp, keepCooked });
+      msgEl.textContent = '✓ Archive saved and downloaded' + ((resetProd || resetPkg || resetDisp) ? ' — the selected data has been reset for the new month.' : '.');
       msgEl.className = 'form-msg ok';
       document.getElementById('archiveResetProd').checked = false;
       document.getElementById('archiveResetPkg').checked = false;
+      document.getElementById('archiveResetDisp').checked = false;
       renderMasterArchiveList();
     } finally {
       btn.disabled = false; btn.textContent = btnLabel;
