@@ -1545,25 +1545,56 @@
     }
     .svc-role-label{grid-area:role;}
   }
+  /* ---------- Dispatching: boxed, color-coded sections ---------- */
+  .dsp-box{--dsp-c:#2F5D7C;background:#F7F5EE;border:2px solid var(--dsp-c);border-radius:8px;overflow:hidden;margin-bottom:30px;}
+  .dsp-blue{--dsp-c:#2F5D7C;}
+  .dsp-green{--dsp-c:#3F6B45;}
+  .dsp-rust{--dsp-c:#A2452A;}
+  .dsp-head{background:var(--dsp-c);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;
+    align-items:center;gap:12px;flex-wrap:wrap;}
+  .dsp-head h3{margin:0;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;letter-spacing:.04em;
+    text-transform:uppercase;color:#fff;display:flex;align-items:center;gap:10px;}
+  .dsp-num{display:inline-flex;width:24px;height:24px;border-radius:50%;background:#fff;color:var(--dsp-c);
+    align-items:center;justify-content:center;font-size:13px;font-weight:700;}
+  .dsp-sub{font-size:11.5px;color:rgba(255,255,255,.85);margin-top:4px;}
+  .dsp-body{padding:16px 18px;color:#1B1E1A;}
+  .dsp-note{background:#fff;border-left:4px solid var(--dsp-c);padding:10px 14px;font-size:12.5px;line-height:1.55;border-radius:3px;}
+  .dsp-body .kanban-empty{color:#6B6F66;}
+  .dsp-body table.proc-table th, .dsp-body table.proc-table td{color:#1B1E1A;}
+
+  /* ---------- Hold column split ---------- */
+  .hold-group.no-ing > summary{background:#F4D9D2;color:#8A2E1A;}
+  .hold-group.for-rel > summary{background:#F5E8B9;color:#6B5200;}
+
   /* ---------- Calendar module ---------- */
   .cal-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;}
   .cal-month-switch{display:flex;align-items:center;gap:10px;}
-  .cal-month-label{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;min-width:190px;}
-  .cal-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--steel);align-items:center;}
+  .cal-month-label{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;min-width:190px;color:#F4F1E8;text-align:center;}
+  .cal-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#E4E1D6;align-items:center;}
   .cal-legend span{display:flex;align-items:center;gap:6px;}
   .cal-swatch{width:11px;height:11px;border-radius:3px;display:inline-block;}
   .cal-swatch.tasting{background:#E3B505;}
   .cal-swatch.event{background:#2E6FB7;}
   .cal-swatch.prod{background:#B14A2C;}
   .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px;}
-  .cal-weekdays div{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.05em;
-    text-transform:uppercase;color:var(--steel);text-align:center;}
+  .cal-weekdays div{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.05em;
+    text-transform:uppercase;color:#C9C6BA;text-align:center;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
   .cal-cell{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-height:104px;
     padding:7px 8px;display:flex;flex-direction:column;gap:5px;}
   .cal-cell.out{opacity:.42;}
   .cal-cell.today{border-color:var(--herb);box-shadow:inset 0 0 0 1px var(--herb);}
   .cal-daynum{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--steel);}
+  .cal-daytop{display:flex;justify-content:space-between;align-items:center;gap:4px;}
+  .cal-pill{font-family:'IBM Plex Mono',monospace;font-size:9.5px;padding:2px 7px;border-radius:999px;
+    cursor:pointer;background:transparent;line-height:1.4;white-space:nowrap;}
+  .cal-pill.none{border:1.4px dashed #B6AF98;color:#8f8871;}
+  .cal-pill.closed{background:#F3E1DA;color:#A64B34;border:1.4px solid #A64B34;font-weight:600;}
+  .cal-pill.open{background:#E6EEE1;color:#4E6B47;border:1.4px solid #6E8B63;font-weight:600;}
+  .cal-pill[disabled]{cursor:default;}
+  .cal-swatch.closed{background:#A64B34;}
+  .cal-swatch.open{background:#6E8B63;}
+  .cal-swatch.none{background:transparent;border:1.5px dashed #B6AF98;}
   .cal-chip{border-radius:4px;padding:4px 6px;font-size:11px;line-height:1.3;cursor:pointer;
     color:#fff;overflow:hidden;text-overflow:ellipsis;}
   .cal-chip.tasting{background:#E3B505;color:#3A2E00;}
@@ -1917,10 +1948,6 @@
               <label for="prodCommi">Commi in charge</label>
               <input type="text" id="prodCommi" placeholder="e.g. Commi 2 — Aldrin P.">
             </div>
-            <div>
-              <label for="prodEventPlace">Event place</label>
-              <input type="text" id="prodEventPlace" placeholder="e.g. Tagaytay Highlands">
-            </div>
           </div>
           <p class="recipe-hint" id="recipeHint"></p>
 
@@ -2004,30 +2031,47 @@
 
   <!-- ===================== TAB: DISPATCHING (COOKED FOOD INVENTORY) ===================== -->
   <section class="panel" id="panel-dispatch">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-      <p class="section-label" style="color:#9C9F92;margin-bottom:0;">COOKED FOOD INVENTORY — DISPATCHING</p>
-      <button class="print-btn" id="printDispatchBtn" type="button">🖨 Print dispatch board</button>
-    </div>
-    <p class="recipe-hint" style="margin-top:8px;">
-      Every production batch moved to Done lands here as cooked food, counted in pax.
-    </p>
-    <div id="dispatchFolders" style="margin-top:18px;"></div>
 
-    <div style="margin-top:34px;">
-      <p class="section-label" style="color:#9C9F92;">COOKED FOOD IN / OUT SUMMARY</p>
-      <div class="stockout-card" style="display:block;">
-        <p style="margin:0 0 10px;font-size:12.5px;line-height:1.55;">
+    <div class="dsp-box dsp-blue">
+      <div class="dsp-head">
+        <div>
+          <h3><span class="dsp-num">1</span> Cooked Food Inventory — Dispatching</h3>
+          <div class="dsp-sub">Every production batch moved to Done lands here as cooked food, counted in pax.</div>
+        </div>
+        <button class="print-btn" id="printDispatchBtn" type="button">🖨 Print dispatch board</button>
+      </div>
+      <div class="dsp-body">
+        <div id="dispatchFolders"></div>
+      </div>
+    </div>
+
+    <div class="dsp-box dsp-green">
+      <div class="dsp-head">
+        <div>
+          <h3><span class="dsp-num">2</span> Cooked Food In / Out Summary</h3>
+          <div class="dsp-sub">Running total by recipe category.</div>
+        </div>
+      </div>
+      <div class="dsp-body">
+        <div class="dsp-note">
           <b>Note:</b> this is strictly on a <b>pax basis, not a kg basis</b> of food. Make sure the production
           made is equivalent to that specific pax — this is what holds the number of foods taken to the events
           accountable.
-        </p>
+        </div>
+        <div id="dispatchSummary" style="margin-top:12px;"></div>
       </div>
-      <div id="dispatchSummary" style="margin-top:12px;"></div>
     </div>
 
-    <div style="margin-top:34px;">
-      <p class="section-label" style="color:#9C9F92;">COMMI HEAD ASSIGNED BATCHES</p>
-      <div id="commiSummary"></div>
+    <div class="dsp-box dsp-rust">
+      <div class="dsp-head">
+        <div>
+          <h3><span class="dsp-num">3</span> Commi Head Assigned Batches</h3>
+          <div class="dsp-sub">Who is in charge of which production.</div>
+        </div>
+      </div>
+      <div class="dsp-body">
+        <div id="commiSummary"></div>
+      </div>
     </div>
   </section>
 
@@ -2044,6 +2088,9 @@
         <span><span class="cal-swatch tasting"></span>Food tasting</span>
         <span><span class="cal-swatch event"></span>Event</span>
         <span><span class="cal-swatch prod"></span>Production schedule</span>
+        <span><span class="cal-swatch open"></span>Open</span>
+        <span><span class="cal-swatch closed"></span>Closed</span>
+        <span><span class="cal-swatch none"></span>Not marked</span>
       </div>
       <div style="display:flex;gap:8px;">
         <button class="print-btn" type="button" id="calPrintBtn">🖨 Print calendar</button>
@@ -2933,6 +2980,7 @@ function initApp(){
           </div>
           ${availabilityHtml}
           ${linkedHtml}
+          ${canDelete() ? '<div class="kanban-actions" style="margin-top:10px;"><button type="button" class="del" data-action="delete-inv">Delete ingredient</button></div>' : ''}
         </div>
       `;
     }
@@ -2979,6 +3027,27 @@ function initApp(){
         logInventoryChange(item.name, item.uom, oldQty, newQty, 'Manual stock update');
         // Stock went up — see if any Hold production plans can now proceed.
         await syncProductionCommitments();
+        renderInventoryTable();
+        renderProductionList();
+      });
+    });
+
+    wrap.querySelectorAll('[data-action="delete-inv"]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        if(!canDelete()) return;
+        const key = e.target.closest('.kanban-card').dataset.key;
+        const item = inventory.find(i => i.key === key);
+        if(!item) return;
+        const usedBy = recipes.filter(r => (r.ingredients || []).some(ing => ingredientKey(ing.name, ing.uom) === key));
+        const holdBy = plans.filter(p => !p.validated && usedBy.some(r => r.id === p.recipeId));
+        let msg = 'Delete "' + item.name + '" (' + item.uom + ') from the inventory? This cannot be undone.';
+        if(usedBy.length) msg += '\n\nIt is still used in ' + usedBy.length + ' saved recipe(s) — it will come back automatically if one of them is saved again.';
+        if(holdBy.length) msg += '\n\n' + holdBy.length + ' unfinished production batch(es) use this ingredient.';
+        if(!window.confirm(msg)) return;
+        inventory = inventory.filter(i => i.key !== key);
+        await persistInventory();
+        logStockEvent(item.name, item.uom, 'Ingredient deleted from inventory');
+        await persistInventoryHistory();
         renderInventoryTable();
         renderProductionList();
       });
@@ -3238,7 +3307,7 @@ function initApp(){
         <title>${escapeHtml(title)}</title>
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
-          *{box-sizing:border-box;}
+          *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
           body{font-family:'Inter',sans-serif;color:#1B1E1A;margin:0;padding:30px 34px;}
           h1{font-family:'Space Grotesk',sans-serif;font-size:21px;margin:0 0 3px;}
           .print-sub{color:#6B6F66;font-size:12px;margin:0 0 18px;font-family:'IBM Plex Mono',monospace;}
@@ -3295,29 +3364,36 @@ function initApp(){
   // total). warning: optional extra line shown under the legend.
   function buildPieChartHtml(slices, warning){
     const total = slices.reduce((s,x)=>s + Math.max(0, x.value), 0);
-    let bg = '#33362F';
+    // Drawn as inline SVG (not a CSS conic-gradient background) so the colors
+    // survive printing — browsers drop CSS backgrounds unless "Background
+    // graphics" is ticked, but they always print SVG fills.
+    const R = 25, C = 2 * Math.PI * R;
+    let arcs = '';
     if(total > 0){
       let cumulative = 0;
-      const stops = slices.map(s=>{
-        const start = cumulative;
-        const width = (Math.max(0, s.value) / total) * 100;
-        cumulative += width;
-        return `${s.color} ${start}% ${cumulative}%`;
-      }).join(', ');
-      bg = `conic-gradient(${stops})`;
+      slices.forEach(sl=>{
+        const len = (Math.max(0, sl.value) / total) * C;
+        if(len <= 0) return;
+        arcs += `<circle cx="50" cy="50" r="${R}" fill="none" style="stroke:${sl.color};" stroke-width="50"` +
+          ` stroke-dasharray="${len.toFixed(3)} ${(C - len).toFixed(3)}" stroke-dashoffset="${(-cumulative).toFixed(3)}"` +
+          ` transform="rotate(-90 50 50)"/>`;
+        cumulative += len;
+      });
+    } else {
+      arcs = '<circle cx="50" cy="50" r="50" style="fill:#33362F;"/>';
     }
     const legend = slices.map(s=>{
       const pct = s.pct !== undefined ? s.pct : (total > 0 ? (s.value/total)*100 : 0);
       return `
         <div class="legend-item">
-          <span class="legend-label"><span class="legend-swatch" style="background:${s.color};"></span>${escapeHtml(s.label)}</span>
+          <span class="legend-label"><span class="legend-swatch" style="background:${s.color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${escapeHtml(s.label)}</span>
           <span class="legend-value">${PHP(s.value)} (${pct.toFixed(pct < 10 && pct !== 0 ? 1 : 0)}%)</span>
         </div>
       `;
     }).join('');
     return `
       <div class="piechart-row">
-        <div class="piechart-circle" style="background:${bg};"></div>
+        <svg class="piechart-svg" viewBox="0 0 100 100" width="104" height="104" style="min-width:104px;border-radius:50%;">${arcs}</svg>
         <div class="piechart-legend">${legend}</div>
       </div>
       ${warning ? `<div class="legend-warning">${escapeHtml(warning)}</div>` : ''}
@@ -3903,7 +3979,7 @@ function initApp(){
   }
 
   // ---------- Recipe Manual / CCP board ----------
-  const COURSES = ['Appetizer','Soup','Bread','Salad','Beef Entree','Pork Entree','Chicken Entree','Seafood','Pasta','Dessert','Beverage','Sauce'];
+  const COURSES = ['Appetizer','Soup','Bread','Salad','Beef Entree','Pork Entree','Chicken Entree','Seafood','Pasta','Dessert','Beverage','Sauce','Staff Meal'];
   let ccpSelection = {};
   const ccpBoardEl = document.getElementById('ccpBoard');
 
@@ -3962,13 +4038,13 @@ function initApp(){
         `).join('')}
       </div>
       <label class="ccp-label">Critical control points</label>
-      <textarea class="ccp-textarea" rows="4" placeholder="e.g. Cook to internal temp 74°C. Hold hot above 60°C. Cool leftovers within 4 hrs.">${escapeHtml(recipe.ccpNotes || '')}</textarea>
-      <button class="ccp-save-btn" type="button">Save CCP notes</button>
+      <textarea class="ccp-textarea" rows="4" ${canEdit() ? '' : 'readonly'} placeholder="e.g. Cook to internal temp 74°C. Hold hot above 60°C. Cool leftovers within 4 hrs.">${escapeHtml(recipe.ccpNotes || '')}</textarea>
+      ${canEdit() ? '<button class="ccp-save-btn" type="button">Save CCP notes</button>' : '<div class="recipe-hint">Only Admin and Manager can save CCP notes.</div>'}
       <div class="ccp-save-msg"></div>
     `;
 
     const ccpSaveBtn = container.querySelector('.ccp-save-btn');
-    ccpSaveBtn.addEventListener('click', async ()=>{
+    if(ccpSaveBtn) ccpSaveBtn.addEventListener('click', async ()=>{
       if(ccpSaveBtn.disabled) return; // guard against duplicate clicks while saving
       const notes = container.querySelector('.ccp-textarea').value;
       const idx = recipes.findIndex(r => r.id === recipe.id);
@@ -4094,7 +4170,6 @@ function initApp(){
     document.getElementById('prodStart').value = '';
     document.getElementById('prodEnd').value = '';
     document.getElementById('prodCommi').value = '';
-    document.getElementById('prodEventPlace').value = '';
     document.getElementById('batchNumberHint').textContent = 'Batch #: will be assigned when saved';
     updateRunEstimate();
   }
@@ -4110,7 +4185,6 @@ function initApp(){
     document.getElementById('prodStart').value = plan.startTime;
     document.getElementById('prodEnd').value = plan.endTime;
     document.getElementById('prodCommi').value = plan.commi || '';
-    document.getElementById('prodEventPlace').value = plan.eventPlace || '';
     document.getElementById('batchNumberHint').textContent = 'Batch #: ' + (plan.batchNumber || '—') + ' (permanent, does not change)';
     updateRunEstimate();
 
@@ -4152,7 +4226,6 @@ function initApp(){
     const startTime = document.getElementById('prodStart').value;
     const endTime = document.getElementById('prodEnd').value;
     const commi = document.getElementById('prodCommi').value.trim();
-    const eventPlace = document.getElementById('prodEventPlace').value.trim();
 
     prodFormMsg.className = 'form-msg';
     prodFormMsg.textContent = '';
@@ -4202,8 +4275,9 @@ function initApp(){
         plans[idx] = {
           ...plan,
           eventName, eventDate, recipeId, recipeName: recipe.name,
-          pax, batchDate, category, startTime, endTime, commi, eventPlace,
+          pax, batchDate, category, startTime, endTime, commi,
           batches, estCost,
+          released: false, releasedAt: '',
           updatedAt: new Date().toISOString()
         };
         if(!plans[idx].validated){
@@ -4228,7 +4302,7 @@ function initApp(){
         id: 'p-' + Date.now(),
         batchNumber,
         eventName, eventDate, recipeId, recipeName: recipe.name,
-        pax, batchDate, category, startTime, endTime, commi, eventPlace,
+        pax, batchDate, category, startTime, endTime, commi,
         batches, estCost,
         released: false, releasedAt: '',
         stockCommitted: false,
@@ -4322,14 +4396,25 @@ function initApp(){
     `).join('');
   }
 
+  // A Hold batch is either short of ingredients or ready to be released.
+  function planHasShortage(p){
+    const lines = planIngredientLines(p);
+    if(lines.length === 0) return true;
+    return lines.some(l => l.onHand < l.required);
+  }
+
   function renderProductionCard(p){
+    const isReleased = !!(p.released && p.stockCommitted);
+    const holdShort = (!p.validated && !p.stockCommitted) ? planHasShortage(p) : false;
     const timing = (p.startTime ? formatTimeDisplay(p.startTime) : '—') +
       (p.endTime ? ' – ' + formatTimeDisplay(p.endTime) : '');
     const statusTag = p.validated
       ? '<span class="status-tag" style="background:var(--surface-alt);color:var(--steel);">DONE</span>'
       : (p.stockCommitted
         ? '<span class="status-tag go">GO — stock reserved</span>'
-        : '<span class="status-tag nogo">NO-GO — not yet released</span>');
+        : (holdShort
+          ? '<span class="status-tag nogo">NO-GO — no ingredients</span>'
+          : '<span class="status-tag nogo">NO-GO — for releasing</span>'));
 
     let actionsHtml = `<button type="button" data-action="view-prod">View</button>`;
     if(p.validated){
@@ -4337,11 +4422,11 @@ function initApp(){
         (canValidate() ? `<button type="button" data-action="reopen-prod">Reopen</button>` : '') +
         (canDelete() ? `<button type="button" class="del" data-action="delete-prod">Delete</button>` : '');
     } else {
-      if(!p.released){
+      if(!isReleased && !holdShort){
         actionsHtml += (canValidate() ? `<button type="button" class="validate" data-action="release-prod">Release</button>` : '');
       }
       actionsHtml += `<button type="button" data-action="stub-prod">Print stub</button>`;
-      actionsHtml += ((canValidate() && p.released) ? `<button type="button" class="validate" data-action="validate-prod">Validate</button>` : '') +
+      actionsHtml += ((canValidate() && isReleased) ? `<button type="button" class="validate" data-action="validate-prod">Validate</button>` : '') +
         (canEdit() ? `<button type="button" data-action="edit-prod">Edit</button>` : '') +
         (canDelete() ? `<button type="button" class="del" data-action="delete-prod">Delete</button>` : '');
     }
@@ -4354,7 +4439,7 @@ function initApp(){
         <div class="rname">${escapeHtml(p.eventName)}</div>
         <div class="rmeta">
           ${escapeHtml(p.recipeName)} · ${p.pax} pax needed · ${p.batches} batch${p.batches===1?'':'es'}<br>
-          commi: ${escapeHtml(p.commi || '—')}${p.eventPlace ? ' · ' + escapeHtml(p.eventPlace) : ''}<br>
+          commi: ${escapeHtml(p.commi || '—')}<br>
           batch date ${formatDateDisplay(p.batchDate)} · ${timing}
         </div>
         <div class="rprice">${PHP(p.estCost)} est. cost</div>
@@ -4432,8 +4517,33 @@ function initApp(){
       `;
     }
 
+    // Hold is split into two fixed dropdown groups so nothing piles up in one
+    // long scrolling list.
+    function holdColumnHtml(items){
+      const noIng = items.filter(planHasShortage);
+      const forRel = items.filter(p => !planHasShortage(p));
+      function grp(label, cls, list){
+        return `
+          <details class="station-group hold-group ${cls}" open>
+            <summary>${label} <span class="kanban-count">${list.length}</span></summary>
+            ${list.length === 0
+              ? '<div class="kanban-empty">Nothing here.</div>'
+              : `<div class="kanban-cards">${list.map(renderProductionCard).join('')}</div>`}
+          </details>`;
+      }
+      return `
+        <div class="kanban-col hold">
+          <div class="kanban-col-head">
+            <h3>HOLD (NO-GO)</h3>
+            <span class="kanban-count">${items.length}</span>
+          </div>
+          ${grp('1 · No ingredients', 'no-ing', noIng)}
+          ${grp('2 · For releasing', 'for-rel', forRel)}
+        </div>`;
+    }
+
     productionBoardEl.innerHTML =
-      columnHtml('HOLD (NO-GO)', 'hold', hold) +
+      holdColumnHtml(hold) +
       groupedColumnHtml('PROCESSING (GO)', 'processing', processing, true) +
       groupedColumnHtml('DONE (Archived)', 'done', done, false);
 
@@ -4741,7 +4851,7 @@ function initApp(){
         <tr><th>Commi in charge</th><td><b>${escapeHtml(plan.commi || '—')}</b></td></tr>
         <tr><th>Food</th><td>${escapeHtml(plan.recipeName)}</td></tr>
         <tr><th>Pax / batches</th><td>${plan.pax} pax · ${plan.batches} batch${plan.batches===1?'':'es'}</td></tr>
-        <tr><th>Event place</th><td>${escapeHtml(plan.eventPlace || '—')}</td></tr>
+        <tr><th>Event</th><td>${escapeHtml(plan.eventName)}</td></tr>
         <tr><th>Timing</th><td>${plan.startTime ? formatTimeDisplay(plan.startTime) : '—'}${plan.endTime ? ' – ' + formatTimeDisplay(plan.endTime) : ''}</td></tr>
       </table>
 
@@ -4804,7 +4914,7 @@ function initApp(){
         <summary>${escapeHtml(key)} <span class="kanban-count">${folders[key].length}</span></summary>
         <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
           <thead><tr>
-            <th>Commi in charge</th><th>Food</th><th>Event place</th>
+            <th>Commi in charge</th><th>Food</th>
             <th class="num">Pax</th><th>Date of production</th><th>Dispatch</th>
           </tr></thead>
           <tbody>
@@ -4812,7 +4922,6 @@ function initApp(){
               <tr>
                 <td>${escapeHtml(p.commi || '—')}</td>
                 <td>${escapeHtml(p.recipeName)} <span class="batch-tag">#${escapeHtml(p.batchNumber || '—')}</span></td>
-                <td>${escapeHtml(p.eventPlace || '—')}</td>
                 <td class="num">${p.dispatchedAt ? 0 : (p.cookedPax || p.pax)}</td>
                 <td>${formatDateDisplay(p.batchDate)}</td>
                 <td>${p.dispatchedAt
@@ -4929,13 +5038,12 @@ function initApp(){
       <h1>Dispatch Board — Cooked Food Inventory</h1>
       <p class="print-sub">Strictly on a pax basis, not a kg basis.</p>
       <table>
-        <thead><tr><th>Event / day</th><th>Commi</th><th>Food</th><th>Place</th><th class="num">Pax</th><th>Produced</th><th>Dispatched</th></tr></thead>
+        <thead><tr><th>Event / day</th><th>Commi</th><th>Food</th><th class="num">Pax</th><th>Produced</th><th>Dispatched</th></tr></thead>
         <tbody>
           ${done.map(p=>`<tr>
             <td>${escapeHtml((p.eventDate || '') + ' ' + p.eventName)}</td>
             <td>${escapeHtml(p.commi || '—')}</td>
             <td>${escapeHtml(p.recipeName)}</td>
-            <td>${escapeHtml(p.eventPlace || '—')}</td>
             <td class="num">${p.cookedPax || p.pax}</td>
             <td>${formatDateDisplay(p.batchDate)}</td>
             <td>${p.dispatchedAt ? formatDateDisplay(p.dispatchedAt) : '☐'}</td>
@@ -4957,6 +5065,8 @@ function initApp(){
   // =====================================================================
   const CAL_KEY = 'calendar_events';
   let calEvents = [];
+  let calStatuses = {};   // { 'YYYY-MM-DD': 'open' | 'closed' }  (no entry = not marked yet)
+  const CAL_STATUS_KEY = 'calendar_day_status';
   let calCursor = new Date();
   let calEditingId = null;
 
@@ -4973,6 +5083,18 @@ function initApp(){
       calEvents = res && res.value ? JSON.parse(res.value) : [];
     }catch(e){ calEvents = []; }
     if(!Array.isArray(calEvents)) calEvents = [];
+    try{
+      const st = await gasCall('get', { key: CAL_STATUS_KEY });
+      calStatuses = st && st.value ? JSON.parse(st.value) : {};
+    }catch(e){ calStatuses = {}; }
+    if(!calStatuses || typeof calStatuses !== 'object' || Array.isArray(calStatuses)) calStatuses = {};
+  }
+  async function persistCalendarStatuses(){
+    try{ await gasCall('set', { key: CAL_STATUS_KEY, value: JSON.stringify(calStatuses) }); }
+    catch(e){ console.warn('Calendar status save failed', e); }
+  }
+  function calStatusLabel(st){
+    return st === 'closed' ? '✕ Closed' : (st === 'open' ? '✓ Open' : 'Mark');
   }
   async function persistCalendarEvents(){
     try{ await gasCall('set', { key: CAL_KEY, value: JSON.stringify(calEvents) }); }
@@ -5027,6 +5149,7 @@ function initApp(){
     const year = calCursor.getFullYear();
     const month = calCursor.getMonth();
     document.getElementById('calMonthLabel').textContent = MONTH_NAMES[month] + ' ' + year;
+    document.getElementById('calNewBtn').style.display = canEdit() ? '' : 'none';
 
     const entries = calAllEntries();
     const firstDow = new Date(year, month, 1).getDay();
@@ -5040,7 +5163,11 @@ function initApp(){
       const dayEntries = entries.filter(e => e.date === info.iso);
       html += `
         <div class="cal-cell ${info.out ? 'out' : ''} ${info.iso === today ? 'today' : ''}">
-          <div class="cal-daynum">${info.date}</div>
+          <div class="cal-daytop">
+            <div class="cal-daynum">${info.date}</div>
+            <button type="button" class="cal-pill ${calStatuses[info.iso] || 'none'}" data-cal-status="${info.iso}"
+              ${canEdit() ? '' : 'disabled'}>${calStatusLabel(calStatuses[info.iso])}</button>
+          </div>
           ${dayEntries.map(e=>`
             <div class="cal-chip ${e.kind}" data-cal-id="${escapeHtml(e.id)}" title="${escapeHtml(e.title)}">
               ${escapeHtml(e.title)}
@@ -5052,6 +5179,19 @@ function initApp(){
 
     grid.querySelectorAll('[data-cal-id]').forEach(chip=>{
       chip.addEventListener('click', ()=> openCalendarEntry(chip.dataset.calId));
+    });
+    grid.querySelectorAll('[data-cal-status]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!canEdit()) return;
+        const iso = btn.dataset.calStatus;
+        const cur = calStatuses[iso];
+        // Same cycle as the food-tasting schedule: Mark -> Closed -> Open -> Mark
+        if(!cur) calStatuses[iso] = 'closed';
+        else if(cur === 'closed') calStatuses[iso] = 'open';
+        else delete calStatuses[iso];
+        renderCalendar();
+        await persistCalendarStatuses();
+      });
     });
     grid.querySelectorAll('[data-cal-add]').forEach(btn=>{
       btn.addEventListener('click', ()=> openCalendarForm(null, btn.dataset.calAdd));
@@ -5092,9 +5232,28 @@ function initApp(){
   }
   document.getElementById('calCloseBtn').addEventListener('click', closeCalModal);
 
+  // Assistant (chef2) and Viewer can look at events / food tastings, read-only.
+  function openCalendarReadOnly(ev){
+    document.getElementById('calModalTitle').textContent = ev.isTasting ? 'Food tasting' : 'Event';
+    calModalBody.innerHTML = `
+      <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
+        <tr><th style="text-align:left;">Date</th><td><b>${formatDateDisplay(ev.date)}</b></td></tr>
+        <tr><th style="text-align:left;">Venue / event</th><td>${escapeHtml(ev.venue)}</td></tr>
+        <tr><th style="text-align:left;">Person in charge</th><td>${escapeHtml(ev.person || '—')}</td></tr>
+        <tr><th style="text-align:left;">Type</th><td>${ev.isTasting ? 'Food tasting' : 'Event'}</td></tr>
+      </table>`;
+    calFormMsg.textContent = '';
+    calSaveBtn.style.display = 'none';
+    calDeleteBtn.style.display = 'none';
+    calOverlay.style.display = 'flex';
+  }
+
   function openCalendarForm(id, prefillDate){
-    if(!canEdit()) return;
     const ev = id ? calEvents.find(e => e.id === id) : null;
+    if(!canEdit()){
+      if(ev) openCalendarReadOnly(ev);
+      return;
+    }
     calEditingId = id;
     document.getElementById('calModalTitle').textContent = ev ? 'Edit entry' : 'Add entry';
     calModalBody.innerHTML = `
@@ -5178,7 +5337,6 @@ function initApp(){
           <tr><th style="text-align:left;">Production category</th><td>${escapeHtml(plan.category || '—')}</td></tr>
           <tr><th style="text-align:left;">Pax / batches</th><td>${plan.pax} pax · ${plan.batches} batch${plan.batches===1?'':'es'}</td></tr>
           <tr><th style="text-align:left;">Event</th><td>${escapeHtml(plan.eventName)}${plan.eventDate ? ' · ' + formatDateDisplay(plan.eventDate) : ''}</td></tr>
-          <tr><th style="text-align:left;">Event place</th><td>${escapeHtml(plan.eventPlace || '—')}</td></tr>
           <tr><th style="text-align:left;">Timing</th><td>${plan.startTime ? formatTimeDisplay(plan.startTime) : '—'}${plan.endTime ? ' – ' + formatTimeDisplay(plan.endTime) : ''}</td></tr>
           <tr><th style="text-align:left;">Status</th><td>${plan.validated ? 'Done' : 'Processing (GO)'}</td></tr>
         </table>`;
@@ -5200,15 +5358,26 @@ function initApp(){
     renderCalendar();
   });
   document.getElementById('calNewBtn').addEventListener('click', ()=> openCalendarForm(null, calTodayIso()));
+  if(!canEdit()){ document.getElementById('calNewBtn').style.display = 'none'; }
 
   document.getElementById('calPrintBtn').addEventListener('click', ()=>{
     const year = calCursor.getFullYear(), month = calCursor.getMonth();
+    function monthStatusDates(kind){
+      const prefix = year + '-' + calPad(month+1);
+      const days = Object.keys(calStatuses).filter(d => d.slice(0,7) === prefix && calStatuses[d] === kind).sort();
+      return days.length ? days.map(d => formatDateDisplay(d)).join(', ') : '—';
+    }
     const entries = calAllEntries()
       .filter(e => e.date.slice(0,7) === year + '-' + calPad(month+1))
       .sort((a,b)=> a.date.localeCompare(b.date));
     const body = `
       <h1>Calendar — ${MONTH_NAMES[month]} ${year}</h1>
       <p class="print-sub">Yellow = food tasting · Blue = event · Red = production schedule</p>
+      <p class="section-label">DAY STATUS</p>
+      <table>
+        <tr><th style="width:120px;">Open</th><td>${monthStatusDates('open')}</td></tr>
+        <tr><th>Closed</th><td>${monthStatusDates('closed')}</td></tr>
+      </table>
       <table>
         <thead><tr><th>Date</th><th>Type</th><th>Details</th></tr></thead>
         <tbody>
