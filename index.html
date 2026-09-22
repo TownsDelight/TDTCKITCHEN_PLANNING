@@ -89,6 +89,8 @@
     white-space:nowrap;
   }
   .print-btn:hover{background:#E9E5D8;}
+  .print-btn.done-btn{background:var(--herb,#5C7A5A);color:#fff;cursor:default;opacity:.92;}
+  .print-btn.done-btn:hover{background:var(--herb,#5C7A5A);}
 
   /* ---------- Tabs ---------- */
   .tabs{
@@ -1815,7 +1817,6 @@
       Access: <span class="role-badge-pill" id="currentRoleBadge">—</span>
       <button class="print-btn" id="masterArchiveOpenBtn" type="button" style="margin-top:6px;display:none;">🗄 Master Archive</button>
       <button class="print-btn" id="manageAccessOpenBtn" type="button" style="margin-top:6px;display:none;">🔐 Manage Access</button>
-      <button class="print-btn" id="printBtn" type="button" style="margin-top:6px;">🖨 Print / Save as PDF</button>
       <button class="print-btn" id="logoutBtn" type="button" style="margin-top:6px;">Refresh</button>
     </div>
   </header>
@@ -2269,9 +2270,9 @@
         <div class="summary-card">
           <p class="section-label">LIVE PACKAGE SUMMARY</p>
           <div class="summary-line"><span>Food input subtotal (per pax)</span><span id="pkgFoodSubtotal">₱0.00</span></div>
-          <div class="summary-line"><span>Food ×3 (per pax)</span><span id="pkgFoodCharged">₱0.00</span></div>
+          <div class="summary-line"><span>Selling price (per pax)</span><span id="pkgFoodCharged">₱0.00</span></div>
           <div class="summary-line"><span>Number of pax</span><span id="pkgPaxDisplay">— pax</span></div>
-          <div class="summary-line"><span>Food ×3 × pax</span><span id="pkgFoodChargedTotal">₱0.00</span></div>
+          <div class="summary-line"><span>Selling price × pax</span><span id="pkgFoodChargedTotal">₱0.00</span></div>
           <div class="summary-line"><span>Service total (staff & logistics)</span><span id="pkgServiceTotal">₱0.00</span></div>
           <div class="summary-line"><span>Miscellaneous total (flat)</span><span id="pkgMiscTotal">₱0.00</span></div>
           <div class="cost-per-pax">
@@ -3587,7 +3588,7 @@ function initApp(){
   // Cost-breakdown slices (food / service / misc) straight from a saved package.
   function pkgCostBreakdownSlices(pkg){
     return [
-      { label:'Food item cost total (no ×3)', value: pkg.rawFoodTotal || 0, color:'var(--rust)' },
+      { label:'Food item cost total (at food input price)', value: pkg.rawFoodTotal || 0, color:'var(--rust)' },
       { label:'Service cost total', value: pkg.serviceTotal || 0, color:'var(--herb)' },
       { label:'Miscellaneous cost total', value: pkg.miscTotal || 0, color:'var(--gold)' }
     ];
@@ -3870,7 +3871,7 @@ function initApp(){
     openViewModal(pkg.name, `
       <button type="button" class="print-btn pkg-view-print-btn" style="margin-bottom:12px;">🖨 Print this package</button>
       ${pkg.soNumber ? `<p><span class="so-tag">SO# ${escapeHtml(pkg.soNumber)}</span></p>` : ''}
-      <p style="font-size:12.5px;color:var(--ink-soft);">${pkg.pax ? pkg.pax + ' pax · ' : ''}food ×3/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(pkg.serviceTotal||0)} · misc (flat): ${PHP(pkg.miscTotal)}</p>
+      <p style="font-size:12.5px;color:var(--ink-soft);">${pkg.pax ? pkg.pax + ' pax · ' : ''}selling price/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(pkg.serviceTotal||0)} · misc (flat): ${PHP(pkg.miscTotal)}</p>
       <p style="font-weight:600;margin:10px 0 4px;">Food items</p>
       <table class="access-table"><tbody>${foodRows || '<tr><td>None</td></tr>'}</tbody></table>
       <p style="font-weight:600;margin:10px 0 4px;">Service roles</p>
@@ -5111,7 +5112,7 @@ function initApp(){
                 <td class="num">${p.dispatchedAt ? 0 : (p.cookedPax || p.pax)}</td>
                 <td>${formatDateDisplay(p.batchDate)}</td>
                 <td>${p.dispatchedAt
-                  ? '<b>' + formatDateDisplay(p.dispatchedAt) + '</b>'
+                  ? '<button type="button" class="print-btn done-btn" disabled>✓ Dispatched ' + formatDateDisplay(p.dispatchedAt) + '</button>'
                   : (canValidate()
                       ? '<button type="button" class="print-btn" data-dispatch="' + p.id + '">Dispatch</button>'
                       : '—')}</td>
@@ -5854,7 +5855,7 @@ function initApp(){
     const total = foodTotal + serviceTotal + miscTotal;
 
     const slices = [
-      { label:'Food item cost total (no ×3)', value: foodTotal, color:'var(--rust)' },
+      { label:'Food item cost total (at food input price)', value: foodTotal, color:'var(--rust)' },
       { label:'Service cost total', value: serviceTotal, color:'var(--herb)' },
       { label:'Miscellaneous cost total', value: miscTotal, color:'var(--gold)' }
     ];
@@ -6082,7 +6083,7 @@ function initApp(){
 
   function renderPackageList(){
     if(packages.length === 0){
-      packageListEl.innerHTML = '<div class="empty-state">No packages saved yet. Build one above — food items get the ×3 markup (× pax), service roles are price × qty, and miscellaneous is added flat.</div>';
+      packageListEl.innerHTML = '<div class="empty-state">No packages saved yet. Build one above — food items are priced at the selling price (× pax), service roles are price × qty, and miscellaneous is added flat.</div>';
       return;
     }
     const searchEl = document.getElementById('pkgSearchInput');
@@ -6106,7 +6107,7 @@ function initApp(){
           <span class="cat-tag">${pkg.foodItems.length} food · ${serviceCount} service role${serviceCount===1?'':'s'} · ${pkg.miscItems.length} misc</span>
           ${pkg.pax ? `<span class="cat-tag">${pkg.pax} pax</span>` : ''}
           <div class="rname">${escapeHtml(pkg.name)}</div>
-          <div class="rmeta">food ×3/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(serviceTotal)} · misc (flat): ${PHP(pkg.miscTotal)}${pkg.pax ? ' · ' + PHP(pkg.pricePerPax) + ' / pax' : ''}</div>
+          <div class="rmeta">selling price/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(serviceTotal)} · misc (flat): ${PHP(pkg.miscTotal)}${pkg.pax ? ' · ' + PHP(pkg.pricePerPax) + ' / pax' : ''}</div>
           <div class="pax-adjust">
             <label>Adjust pax</label>
             <input type="number" class="pax-adjust-input" min="1" step="1" value="${pkg.pax || ''}" ${pkg.pax ? '' : 'placeholder="pax"'}>
@@ -6336,7 +6337,7 @@ function initApp(){
     const miscRows = (pkg.miscItems||[]).map(m => `<tr><td>${escapeHtml(m.desc||m.description||'—')}</td><td class="num">${PHP(m.price||0)}</td></tr>`).join('');
     const st = pkgPriceStructure(pkg);
     return `
-      <p class="meta">${pkg.pax ? pkg.pax + ' pax · ' : ''}food ×3/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(pkg.serviceTotal||0)} · misc (flat): ${PHP(pkg.miscTotal)}</p>
+      <p class="meta">${pkg.pax ? pkg.pax + ' pax · ' : ''}selling price/pax: ${PHP(pkg.foodCharged)} · service: ${PHP(pkg.serviceTotal||0)} · misc (flat): ${PHP(pkg.miscTotal)}</p>
       <p class="lbl">Food items</p><table><tbody>${foodRows || '<tr><td>None</td></tr>'}</tbody></table>
       <p class="lbl">Service roles</p><table><tbody>${svcRows || '<tr><td>None</td></tr>'}</tbody></table>
       <p class="lbl">Miscellaneous</p><table><tbody>${miscRows || '<tr><td>None</td></tr>'}</tbody></table>
@@ -6696,7 +6697,6 @@ document.getElementById('catFilter').onchange=function(e){var v=e.target.value;
   });
 
   // ---------- Init ----------
-  document.getElementById('printBtn').addEventListener('click', ()=>window.print());
   addIngredientRow();
   buildServiceRows();
   addFoodRow();
