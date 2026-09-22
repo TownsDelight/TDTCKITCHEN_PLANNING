@@ -91,6 +91,8 @@
   .print-btn:hover{background:#E9E5D8;}
   .print-btn.done-btn{background:var(--herb,#5C7A5A);color:#fff;cursor:default;opacity:.92;}
   .print-btn.done-btn:hover{background:var(--herb,#5C7A5A);}
+  .print-btn.dispatch-btn{background:var(--rust,#B5451B);color:#fff;}
+  .print-btn.dispatch-btn:hover{background:var(--rust-dark,#8f3714);}
 
   /* ---------- Tabs ---------- */
   .tabs{
@@ -5114,7 +5116,7 @@ function initApp(){
                 <td>${p.dispatchedAt
                   ? '<button type="button" class="print-btn done-btn" disabled>✓ Dispatched ' + formatDateDisplay(p.dispatchedAt) + '</button>'
                   : (canValidate()
-                      ? '<button type="button" class="print-btn" data-dispatch="' + p.id + '">Dispatch</button>'
+                      ? '<button type="button" class="print-btn dispatch-btn" data-dispatch="' + p.id + '">Dispatch</button>'
                       : '—')}</td>
               </tr>`).join('')}
           </tbody>
