@@ -1605,6 +1605,41 @@
   .cal-due{background:#FBF3D9;border:1px solid #E3B505;border-radius:6px;padding:10px 14px;
     font-size:12.5px;margin-bottom:14px;line-height:1.5;}
   @media (max-width:760px){ .cal-cell{min-height:78px;} }
+
+  /* ---- Inventory edit: name/price rename + loading banner (revision) ---- */
+  .inv-loading-banner{
+    position:fixed; top:0; left:0; right:0; z-index:6000;
+    background:#1B1E1A; color:#fff; font-family:'Space Grotesk',sans-serif;
+    font-weight:600; font-size:13px; text-align:center; padding:10px 16px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    transform:translateY(-100%); transition:transform .18s ease;
+  }
+  .inv-loading-banner.show{ transform:translateY(0); }
+  .inv-loading-banner .spin{
+    width:14px; height:14px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff;
+    border-radius:50%; animation:invspin .7s linear infinite; flex:none;
+  }
+  @keyframes invspin{ to{ transform:rotate(360deg); } }
+  .inv-head-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .inv-edit-btn{
+    background:none; border:1px solid var(--line); border-radius:3px; padding:3px 9px;
+    font-size:11px; font-family:'Space Grotesk',sans-serif; font-weight:600; color:var(--ink-soft);
+    cursor:pointer; white-space:nowrap;
+  }
+  .inv-edit-btn:hover{ background:var(--surface-alt); }
+  .inv-name-edit-row{ margin:6px 0; }
+  .inv-name-edit-row label{ display:block; font-size:10.5px; color:var(--steel); margin-bottom:3px; text-transform:uppercase; letter-spacing:.04em; }
+  .inv-name-edit-row input{ width:100%; padding:7px 9px; font-size:13px; border:1px solid var(--line); border-radius:3px; }
+  .inv-name-edit-actions{ display:flex; gap:8px; margin-top:6px; }
+  .inv-name-edit-actions button{
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:11.5px; border-radius:3px;
+    padding:6px 12px; cursor:pointer; border:1px solid var(--line);
+  }
+  .inv-name-edit-actions .inv-save-name{ background:var(--rust); color:#fff; border-color:var(--rust); }
+  .inv-name-edit-actions .inv-save-name:hover{ background:var(--rust-dark); }
+  .inv-name-edit-actions .inv-cancel-name{ background:#fff; color:var(--ink); }
+  .inv-name-edit-actions .inv-cancel-name:hover{ background:var(--surface-alt); }
+  .inv-name-edit-err{ color:var(--danger); font-size:11px; margin-top:5px; min-height:14px; }
 </style>
 </head>
 <body>
@@ -1760,6 +1795,7 @@
   </div>
 </div>
 
+<div class="inv-loading-banner" id="invLoadingBanner"><span class="spin"></span><span id="invLoadingMsg">Saving…</span></div>
 <div class="wrap" id="appWrap" style="display:none;">
 
 <div id="tvBoardOverlay" class="tv-board-overlay" style="display:none;">
@@ -1824,6 +1860,8 @@
                 <option value="Beverage">Beverage</option>
                 <option value="Sauce">Sauce</option>
                 <option value="Staff Meal">Staff Meal</option>
+                <option value="Food To Go">Food To Go</option>
+                <option value="Vegetables">Vegetables</option>
               </select>
             </div>
           </div>
@@ -1976,8 +2014,8 @@
 
           <div class="field-row">
             <div>
-              <label for="prodCommi">Commi in charge</label>
-              <input type="text" id="prodCommi" placeholder="e.g. Commi 2 — Aldrin P.">
+              <label for="prodCommi">Commis in charge</label>
+              <input type="text" id="prodCommi" placeholder="e.g. Commis 2 — Aldrin P.">
             </div>
           </div>
           <p class="recipe-hint" id="recipeHint"></p>
@@ -1998,6 +2036,7 @@
                 <option value="Sauce Production">Sauce Production</option>
                 <option value="Vegetables Production">Vegetables Production</option>
                 <option value="Staff Meal Production">Staff Meal Production</option>
+                <option value="Food To Go Production">Food To Go Production</option>
               </select>
             </div>
           </div>
@@ -2096,7 +2135,7 @@
     <div class="dsp-box dsp-rust">
       <div class="dsp-head">
         <div>
-          <h3><span class="dsp-num">3</span> Commi Head Assigned Batches</h3>
+          <h3><span class="dsp-num">3</span> Commis Head Assigned Batches</h3>
           <div class="dsp-sub">Who is in charge of which production.</div>
         </div>
       </div>
@@ -2176,11 +2215,11 @@
             </div>
           </div>
 
-          <p class="section-label" style="margin-top:22px;">FOOD ITEMS <span style="color:var(--rust);">(×3 markup applied)</span></p>
+          <p class="section-label" style="margin-top:22px;">FOOD ITEMS</p>
           <div class="headcols" style="grid-template-columns:1.8fr 1fr 1fr 30px;">
             <span>Recipe</span>
             <span>Price /pax (₱)</span>
-            <span>×3 price</span>
+            <span>Selling price (33.3%)</span>
             <span></span>
           </div>
           <div id="pkgFoodRows"></div>
@@ -2936,6 +2975,54 @@ function initApp(){
     return { items, totalCost };
   }
 
+  // ---- loading banner (shown while an inventory edit is saving) ----
+  let _invLoadingDepth = 0;
+  function showInvLoading(msg){
+    _invLoadingDepth++;
+    const b = document.getElementById('invLoadingBanner');
+    document.getElementById('invLoadingMsg').textContent = msg || 'Saving…';
+    if(b) b.classList.add('show');
+  }
+  function hideInvLoading(){
+    _invLoadingDepth = Math.max(0, _invLoadingDepth - 1);
+    if(_invLoadingDepth === 0){
+      const b = document.getElementById('invLoadingBanner');
+      if(b) b.classList.remove('show');
+    }
+  }
+
+  // Renaming an ingredient is the one place its key (name|uom) changes, so
+  // this cascades the new name (and key) into everywhere that key is
+  // referenced: the inventory item itself, every saved recipe's matching
+  // ingredient line, and any production plan's committed-stock record (so
+  // returning stock to the shelf later still finds the right item).
+  async function renameIngredient(item, newName){
+    const oldKey = item.key;
+    const oldName = item.name;
+    const newKey = ingredientKey(newName, item.uom);
+    if(newKey !== oldKey && inventory.some(i => i.key === newKey)){
+      return 'A different ingredient already uses "' + newName + '" (' + item.uom + '). Merge them manually or pick another name.';
+    }
+    item.name = newName;
+    item.key = newKey;
+    let recipesTouched = false;
+    recipes.forEach(r=>{
+      (r.ingredients || []).forEach(ing=>{
+        if(ingredientKey(ing.name, ing.uom) === oldKey){ ing.name = newName; recipesTouched = true; }
+      });
+    });
+    plans.forEach(pl=>{
+      (pl.committedIngredients || []).forEach(c=>{
+        if(c.key === oldKey){ c.key = newKey; c.name = newName; }
+      });
+    });
+    await persistInventory();
+    if(recipesTouched) await persistRecipes();
+    logStockEvent(newName, item.uom, 'Renamed from "' + oldName + '"');
+    await persistInventoryHistory();
+    return null;
+  }
+
   function renderInventoryTable(){
     const wrap = document.getElementById('inventoryTableWrap');
     if(!wrap) return;
@@ -2999,8 +3086,20 @@ function initApp(){
         : '';
       return `
         <div class="kanban-card" data-key="${escapeHtml(item.key)}">
-          <div class="rname">${escapeHtml(item.name)}</div>
+          <div class="inv-head-row">
+            <div class="rname">${escapeHtml(item.name)}</div>
+            ${canEdit() ? '<button type="button" class="inv-edit-btn" data-action="edit-inv-name">Edit</button>' : ''}
+          </div>
           <div class="rmeta">${escapeHtml(item.uom)}${item.rawMeat ? ' · <b>RAW MEAT</b>' : ''}${item.recycleMeat ? ' · <b>RECYCLED MEAT</b>' : ''}</div>
+          <div class="inv-name-edit-row" style="display:none;">
+            <label>Ingredient name</label>
+            <input type="text" class="inv-name-input" value="${escapeHtml(item.name)}">
+            <div class="inv-name-edit-actions">
+              <button type="button" class="inv-save-name">Save</button>
+              <button type="button" class="inv-cancel-name">Cancel</button>
+            </div>
+            <div class="inv-name-edit-err"></div>
+          </div>
           <div class="inv-stock-row">
             <label>Stock on hand</label>
             <input type="number" class="stock-input" min="0" step="0.01" value="${item.stock || 0}" ${canEdit() ? '' : 'disabled title="Your access level does not allow editing stock."'}>
@@ -3038,6 +3137,50 @@ function initApp(){
       </div>
     `;
 
+    wrap.querySelectorAll('[data-action="edit-inv-name"]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const card = e.target.closest('.kanban-card');
+        card.querySelector('.inv-name-edit-row').style.display = 'block';
+        const input = card.querySelector('.inv-name-input');
+        input.focus(); input.select();
+      });
+    });
+    wrap.querySelectorAll('.inv-cancel-name').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const card = e.target.closest('.kanban-card');
+        const key = card.dataset.key;
+        const item = inventory.find(i => i.key === key);
+        card.querySelector('.inv-name-input').value = item ? item.name : '';
+        card.querySelector('.inv-name-edit-err').textContent = '';
+        card.querySelector('.inv-name-edit-row').style.display = 'none';
+      });
+    });
+    wrap.querySelectorAll('.inv-save-name').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const card = e.target.closest('.kanban-card');
+        const key = card.dataset.key;
+        const item = inventory.find(i => i.key === key);
+        if(!item) return;
+        const errEl = card.querySelector('.inv-name-edit-err');
+        const input = card.querySelector('.inv-name-input');
+        const newName = input.value.trim();
+        errEl.textContent = '';
+        if(!newName){ errEl.textContent = 'Enter a name.'; return; }
+        if(newName === item.name){ card.querySelector('.inv-name-edit-row').style.display = 'none'; return; }
+        if(!window.confirm('Rename "' + item.name + '" to "' + newName + '"? This updates every saved recipe that uses it.')) return;
+        btn.disabled = true;
+        showInvLoading('Renaming ingredient and updating recipes…');
+        try{
+          const err = await renameIngredient(item, newName);
+          if(err){ errEl.textContent = err; btn.disabled = false; hideInvLoading(); return; }
+        } finally {
+          hideInvLoading();
+        }
+        renderInventoryTable();
+        renderProductionList();
+      });
+    });
+
     wrap.querySelectorAll('.stock-input').forEach(input=>{
       input.addEventListener('change', async (e)=>{
         const key = e.target.closest('.kanban-card').dataset.key;
@@ -3053,11 +3196,16 @@ function initApp(){
           e.target.value = oldQty;
           return;
         }
-        item.stock = newQty;
-        await persistInventory();
-        logInventoryChange(item.name, item.uom, oldQty, newQty, 'Manual stock update');
-        // Stock went up — see if any Hold production plans can now proceed.
-        await syncProductionCommitments();
+        showInvLoading('Saving stock change…');
+        try{
+          item.stock = newQty;
+          await persistInventory();
+          logInventoryChange(item.name, item.uom, oldQty, newQty, 'Manual stock update');
+          // Stock went up — see if any Hold production plans can now proceed.
+          await syncProductionCommitments();
+        } finally {
+          hideInvLoading();
+        }
         renderInventoryTable();
         renderProductionList();
       });
@@ -3091,11 +3239,16 @@ function initApp(){
         if(!item) return;
         const newPrice = parseFloat(e.target.value) || 0;
         if(newPrice === (item.price || 0)) return;
-        item.price = newPrice;
-        await persistInventory();
-        // One same price, circulating everywhere it's used — update every
-        // saved recipe that uses this ingredient so costing stays accurate.
-        await propagateIngredientPriceChange(item.name, item.uom, newPrice);
+        showInvLoading('Saving price and updating recipes…');
+        try{
+          item.price = newPrice;
+          await persistInventory();
+          // One same price, circulating everywhere it's used — update every
+          // saved recipe that uses this ingredient so costing stays accurate.
+          await propagateIngredientPriceChange(item.name, item.uom, newPrice);
+        } finally {
+          hideInvLoading();
+        }
         renderInventoryTable();
       });
     });
@@ -3757,9 +3910,9 @@ function initApp(){
     printSection(pkg.name + ' — Package Cost Calculator', `
       <h1>${escapeHtml(pkg.name)}</h1>
       <p class="print-sub">${pkg.soNumber ? 'SO# ' + escapeHtml(pkg.soNumber) + ' · ' : ''}${pkg.pax ? pkg.pax + ' pax' : ''}</p>
-      <p class="section-label">Food items (×3 markup applied)</p>
+      <p class="section-label">Food items</p>
       <table>
-        <thead><tr><th>Recipe</th><th class="num">Price /pax</th><th class="num">×3 price</th></tr></thead>
+        <thead><tr><th>Recipe</th><th class="num">Price /pax</th><th class="num">Selling price (33.3%)</th></tr></thead>
         <tbody>${foodRows || '<tr><td colspan="3">None</td></tr>'}</tbody>
       </table>
       <p class="section-label">Service staff &amp; logistics</p>
@@ -4010,7 +4163,7 @@ function initApp(){
   }
 
   // ---------- Recipe Manual / CCP board ----------
-  const COURSES = ['Appetizer','Soup','Bread','Salad','Beef Entree','Pork Entree','Chicken Entree','Seafood','Pasta','Dessert','Beverage','Sauce','Staff Meal'];
+  const COURSES = ['Appetizer','Soup','Bread','Salad','Beef Entree','Pork Entree','Chicken Entree','Seafood','Pasta','Dessert','Beverage','Sauce','Staff Meal','Food To Go','Vegetables'];
   let ccpSelection = {};
   const ccpBoardEl = document.getElementById('ccpBoard');
 
@@ -4879,7 +5032,7 @@ function initApp(){
       <table>
         <tr><th>Batch number</th><td><b style="font-size:17px;">#${escapeHtml(plan.batchNumber || '—')}</b></td></tr>
         <tr><th>Date of production</th><td><b style="font-size:17px;">${formatDateDisplay(plan.batchDate)}</b></td></tr>
-        <tr><th>Commi in charge</th><td><b>${escapeHtml(plan.commi || '—')}</b></td></tr>
+        <tr><th>Commis in charge</th><td><b>${escapeHtml(plan.commi || '—')}</b></td></tr>
         <tr><th>Food</th><td>${escapeHtml(plan.recipeName)}</td></tr>
         <tr><th>Pax / batches</th><td>${plan.pax} pax · ${plan.batches} batch${plan.batches===1?'':'es'}</td></tr>
         <tr><th>Event</th><td>${escapeHtml(plan.eventName)}</td></tr>
@@ -4947,7 +5100,7 @@ function initApp(){
         <summary>${escapeHtml(key)} <span class="kanban-count">${folders[key].length}</span></summary>
         <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
           <thead><tr>
-            <th>Commi in charge</th><th>Food</th>
+            <th>Commis in charge</th><th>Food</th>
             <th class="num">Pax</th><th>Date of production</th><th>Dispatch</th>
           </tr></thead>
           <tbody>
@@ -5054,7 +5207,7 @@ function initApp(){
     if(names.length === 0){ el.innerHTML = ''; return; }
     el.innerHTML = `
       <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
-        <thead><tr><th>Commi in charge</th><th class="num">Batches</th><th>Foods made (pax)</th></tr></thead>
+        <thead><tr><th>Commis in charge</th><th class="num">Batches</th><th>Foods made (pax)</th></tr></thead>
         <tbody>
           ${names.map(n=>`<tr>
             <td>${escapeHtml(n)}</td>
@@ -5071,7 +5224,7 @@ function initApp(){
       <h1>Dispatch Board — Cooked Food Inventory</h1>
       <p class="print-sub">Strictly on a pax basis, not a kg basis.</p>
       <table>
-        <thead><tr><th>Event / day</th><th>Commi</th><th>Food</th><th class="num">Pax</th><th>Produced</th><th>Dispatched</th></tr></thead>
+        <thead><tr><th>Event / day</th><th>Commis</th><th>Food</th><th class="num">Pax</th><th>Produced</th><th>Dispatched</th></tr></thead>
         <tbody>
           ${done.map(p=>`<tr>
             <td>${escapeHtml((p.eventDate || '') + ' ' + p.eventName)}</td>
@@ -5372,7 +5525,7 @@ function initApp(){
         <table class="proc-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
           <tr><th style="text-align:left;">Batch number</th><td><b>#${escapeHtml(plan.batchNumber || '—')}</b></td></tr>
           <tr><th style="text-align:left;">Date of production</th><td><b>${formatDateDisplay(plan.batchDate)}</b></td></tr>
-          <tr><th style="text-align:left;">Commi in charge</th><td>${escapeHtml(plan.commi || '—')}</td></tr>
+          <tr><th style="text-align:left;">Commis in charge</th><td>${escapeHtml(plan.commi || '—')}</td></tr>
           <tr><th style="text-align:left;">Food</th><td>${escapeHtml(plan.recipeName)}</td></tr>
           <tr><th style="text-align:left;">Production category</th><td>${escapeHtml(plan.category || '—')}</td></tr>
           <tr><th style="text-align:left;">Pax / batches</th><td>${plan.pax} pax · ${plan.batches} batch${plan.batches===1?'':'es'}</td></tr>
@@ -6108,7 +6261,7 @@ function initApp(){
 
     add((d.plans||[]).map(p => ({
       'Batch #': p.batchNumber, 'Event': p.eventName, 'Event Date': p.eventDate||'',
-      'Recipe': p.recipeName, 'Category': p.category, 'Commi in charge': p.commi||'',
+      'Recipe': p.recipeName, 'Category': p.category, 'Commis in charge': p.commi||'',
       'Pax': p.pax, 'Batches': p.batches, 'Batch Date': p.batchDate,
       'Start': p.startTime, 'End': p.endTime, 'Est. Cost': p.estCost,
       'Status': planStatusLabel(p),
@@ -6121,7 +6274,7 @@ function initApp(){
     const cooked = (d.plans||[]).filter(p => p.validated && !p.dispatchCleared);
     const catOf = p => { const r = (d.recipes||[]).find(x => x.id === p.recipeId); return (r && r.category) || 'Uncategorized'; };
     add(cooked.map(p => ({
-      'Event Day': p.eventDate||'', 'Event': p.eventName, 'Commi in charge': p.commi||'', 'Food': p.recipeName,
+      'Event Day': p.eventDate||'', 'Event': p.eventName, 'Commis in charge': p.commi||'', 'Food': p.recipeName,
       'Batch #': p.batchNumber, 'Category': catOf(p), 'Pax cooked (in)': p.cookedPax||p.pax,
       'Date of production': p.batchDate, 'Dispatch date': p.dispatchedAt||'',
       'Pax dispatched (out)': p.dispatchedAt ? (p.dispatchedPax||p.cookedPax||p.pax) : 0,
@@ -6138,12 +6291,12 @@ function initApp(){
     const cm = {};
     (d.plans||[]).filter(p => !p.dispatchCleared).forEach(p => {
       const c = p.commi || 'Unassigned';
-      if(!cm[c]) cm[c] = { 'Commi in charge': c, 'Batches': 0, 'Foods made (pax)': {} };
+      if(!cm[c]) cm[c] = { 'Commis in charge': c, 'Batches': 0, 'Foods made (pax)': {} };
       cm[c]['Batches'] += 1;
       cm[c]['Foods made (pax)'][p.recipeName] = (cm[c]['Foods made (pax)'][p.recipeName]||0) + (p.pax||0);
     });
-    add(Object.values(cm).map(x => ({ 'Commi in charge': x['Commi in charge'], 'Batches': x['Batches'],
-      'Foods made (pax)': Object.keys(x['Foods made (pax)']).map(f => f + ' (' + x['Foods made (pax)'][f] + ')').join(', ') })), 'No commi assignments', 'Commi Batches');
+    add(Object.values(cm).map(x => ({ 'Commis in charge': x['Commis in charge'], 'Batches': x['Batches'],
+      'Foods made (pax)': Object.keys(x['Foods made (pax)']).map(f => f + ' (' + x['Foods made (pax)'][f] + ')').join(', ') })), 'No commis assignments', 'Commis Batches');
 
     add((d.packages||[]).map(p => ({
       'Package': p.name, 'SO#': p.soNumber||'', 'Pax': p.pax||'',
@@ -6239,7 +6392,7 @@ function initApp(){
     cookedV.forEach(p => { const k = (p.eventDate || 'No event date') + ' · ' + (p.eventName || 'Unnamed event'); (foldersV[k] = foldersV[k] || []).push(p); });
     const foldersHtml = Object.keys(foldersV).sort().map(k => `
       <details open><summary>${escapeHtml(k)} (${foldersV[k].length})</summary>
-        <table><thead><tr><th>Commi in charge</th><th>Food</th><th class="num">Pax</th><th>Date of production</th><th>Dispatch</th></tr></thead><tbody>
+        <table><thead><tr><th>Commis in charge</th><th>Food</th><th class="num">Pax</th><th>Date of production</th><th>Dispatch</th></tr></thead><tbody>
         ${foldersV[k].map(p => `<tr><td>${escapeHtml(p.commi||'—')}</td><td>${escapeHtml(p.recipeName)} <span class="batch">#${escapeHtml(p.batchNumber||'—')}</span></td>
           <td class="num">${p.dispatchedAt ? 0 : (p.cookedPax||p.pax)}</td><td>${formatDateDisplay(p.batchDate)}</td>
           <td>${p.dispatchedAt ? formatDateDisplay(p.dispatchedAt) : '—'}</td></tr>`).join('')}
@@ -6264,8 +6417,8 @@ function initApp(){
       <div class="card"><p class="lbl" style="margin-top:0;">1 · Cooked food inventory — dispatching</p>${foldersHtml}</div>
       <div class="card"><p class="lbl" style="margin-top:0;">2 · Cooked food in / out summary</p>
         <p class="meta">Strictly on a pax basis, not a kg basis of food.</p>${sumHtml}</div>
-      <div class="card"><p class="lbl" style="margin-top:0;">3 · Commi head assigned batches</p>
-        ${cmHtml ? `<table><thead><tr><th>Commi in charge</th><th class="num">Batches</th><th>Foods made (pax)</th></tr></thead><tbody>${cmHtml}</tbody></table>` : '<div class="empty">No assignments in this archive.</div>'}</div>`;
+      <div class="card"><p class="lbl" style="margin-top:0;">3 · Commis head assigned batches</p>
+        ${cmHtml ? `<table><thead><tr><th>Commis in charge</th><th class="num">Batches</th><th>Foods made (pax)</th></tr></thead><tbody>${cmHtml}</tbody></table>` : '<div class="empty">No assignments in this archive.</div>'}</div>`;
 
     const when = new Date(snapshot.createdAt).toLocaleString('en-PH',{month:'long',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
     return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
