@@ -2436,7 +2436,7 @@
     <div class="cal-grid" id="calGrid"></div>
     <p class="recipe-hint" style="margin-top:14px;">
       Production schedule dates appear automatically in red the moment a batch is released and proceeded
-      in Production Planning. Food tasting and event entries are saved to the shared Firestore database.
+      in Production Planning. Food tasting and event entries are saved to the shared Supabase database.
     </p>
   </section>
 
@@ -2629,119 +2629,100 @@
     </div>
   </section>
 
-  <p class="footer-note">Data is shared through your team's Firestore database — Kitchen Operation Dashboard, Commissary Operations.</p>
+  <p class="footer-note">Data is shared through your team's Supabase database — Kitchen Operation Dashboard, Commissary Operations.</p>
 </div>
 
-<script type="module">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
   // ---------------------------------------------------------------------
-  // Firestore — the app's database.
+  // Supabase — the app's database (replaces Firestore).
   //
-  // Google Sheets/Apps Script has been fully removed. Every read and
-  // write (recipes, inventory, packages, production plans, inventory
-  // history, calendar, master archive, access settings) goes through
-  // Firestore now, using anonymous sign-in.
+  // Every read and write (recipes, inventory, packages, production
+  // plans, inventory history, calendar, master archive, access settings)
+  // goes through Supabase now. This block exposes the exact same
+  // window.firestoreAPI interface the rest of the app already calls
+  // (fsGetCollection, fsReplaceCollection, fsKvGet, fsKvSet, fsKvDelete,
+  // fsKvList) — the name is kept as-is so nothing else in this file has
+  // to change.
+  //
+  // The key below is the "publishable" (anon) key — safe to expose in
+  // client-side code as long as Row Level Security policies are set on
+  // every table (they are, see supabase_schema.sql).
   // ---------------------------------------------------------------------
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-  import {
-    getFirestore, collection, getDocs, getDoc, doc, setDoc, deleteDoc, writeBatch,
-    query, orderBy, startAt, endAt, documentId
-  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-  import {
-    getAuth, signInAnonymously, onAuthStateChanged
-  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  const SUPABASE_URL = "https://jwsheetcjylwzbypyhzz.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_YDuRUW56txYTpgukP7hx5Q_AzNho0at";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyCjRbeFKwQc3RBN81-Zg87e0KTNiX-FAc8",
-    authDomain: "tdtckitchencostrail.firebaseapp.com",
-    projectId: "tdtckitchencostrail",
-    storageBucket: "tdtckitchencostrail.firebasestorage.app",
-    messagingSenderId: "78467366113",
-    appId: "1:78467366113:web:d248ae15d652574cfccba0"
-  };
+  // No auth handshake needed the way Firestore's anonymous sign-in was —
+  // resolves immediately so any `await window.firestoreReady` elsewhere
+  // still works.
+  window.firestoreReady = Promise.resolve();
 
-  const fbApp = initializeApp(firebaseConfig);
-  const db = getFirestore(fbApp);
-  const auth = getAuth(fbApp);
-
-  // Resolves once we're signed in (anonymously) and safe to read/write.
-  window.firestoreReady = new Promise((resolve) => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) resolve();
-      else signInAnonymously(auth).catch((e) => console.error('Firestore anonymous sign-in failed:', e));
-    });
-  });
-
-  // Reads every document in a collection, returning plain objects with
-  // their Firestore document id folded back in as `id` (or `key` for
-  // inventory, to match your existing field name).
+  // Reads every row in a table, returning plain objects with the row's
+  // id column folded back in as `id` (or `key` for inventory, to match
+  // your existing field name). Each table stores its fields in one
+  // `data` jsonb column, so this unpacks that back into a flat object.
   async function fsGetCollection(name, idField = 'id'){
-    await window.firestoreReady;
-    const snap = await getDocs(collection(db, name));
-    const out = [];
-    snap.forEach(d => out.push({ ...d.data(), [idField]: d.id }));
-    return out;
+    const { data, error } = await sb.from(name).select(idField + ', data');
+    if (error) { console.error('fsGetCollection failed:', name, error); throw error; }
+    return (data || []).map(row => ({ ...(row.data || {}), [idField]: row[idField] }));
   }
 
-  // Replaces the whole collection with `items` (array of plain objects,
-  // each keyed by idField). Deletes anything no longer present, upserts
-  // everything else — done as Firestore batched writes (fast, atomic in
-  // groups of 500).
+  // Replaces the whole table with `items` (array of plain objects, each
+  // keyed by idField). Deletes anything no longer present, upserts
+  // everything else — done as chunked upserts/deletes (Postgres has no
+  // 500-write batch cap like Firestore, but we still chunk large sets).
   async function fsReplaceCollection(name, items, idField = 'id'){
-    await window.firestoreReady;
-    const snap = await getDocs(collection(db, name));
-    const existingIds = new Set();
-    snap.forEach(d => existingIds.add(d.id));
+    const { data: existing, error: exErr } = await sb.from(name).select(idField);
+    if (exErr) { console.error('fsReplaceCollection read failed:', name, exErr); throw exErr; }
+    const existingIds = new Set((existing || []).map(r => String(r[idField])));
 
     const keepIds = new Set((items || []).map(it => String(it[idField])));
     const toDelete = [...existingIds].filter(id => !keepIds.has(id));
 
-    // Firestore batches cap at 500 writes — chunk if this ever gets big.
-    const ops = [];
-    (items || []).forEach(it => {
+    const rows = (items || []).map(it => {
       const id = String(it[idField]);
       const data = { ...it };
-      delete data[idField]; // id lives as the doc id, not a field
-      ops.push({ type: 'set', ref: doc(db, name, id), data });
+      delete data[idField]; // id lives as its own column, not inside data
+      return { [idField]: id, data };
     });
-    toDelete.forEach(id => ops.push({ type: 'delete', ref: doc(db, name, id) }));
 
-    for (let i = 0; i < ops.length; i += 500) {
-      const batch = writeBatch(db);
-      ops.slice(i, i + 500).forEach(op => {
-        if (op.type === 'set') batch.set(op.ref, op.data);
-        else batch.delete(op.ref);
-      });
-      await batch.commit();
+    for (let i = 0; i < rows.length; i += 500) {
+      const chunk = rows.slice(i, i + 500);
+      const { error } = await sb.from(name).upsert(chunk, { onConflict: idField });
+      if (error) { console.error('fsReplaceCollection upsert failed:', name, error); throw error; }
+    }
+
+    if (toDelete.length) {
+      const { error } = await sb.from(name).delete().in(idField, toDelete);
+      if (error) { console.error('fsReplaceCollection delete failed:', name, error); throw error; }
     }
   }
 
-  // Simple key/value store (a "kv" collection, one doc per key) — replaces
-  // the old Apps Script get/set/delete/list API used for calendar events,
-  // the Master Archive, and access settings.
+  // Simple key/value store (a "kv" table, one row per key) — replaces
+  // the old Apps Script get/set/delete/list API used for calendar
+  // events, the Master Archive, and access settings.
   async function fsKvGet(key){
-    await window.firestoreReady;
-    const snap = await getDoc(doc(db, 'kv', key));
-    if(!snap.exists()) return null;
-    return { key, value: snap.data().value };
+    const { data, error } = await sb.from('kv').select('value').eq('key', key).maybeSingle();
+    if (error) { console.error('fsKvGet failed:', key, error); throw error; }
+    if (!data) return null;
+    return { key, value: data.value };
   }
   async function fsKvSet(key, value){
-    await window.firestoreReady;
-    await setDoc(doc(db, 'kv', key), { value: value });
+    const { error } = await sb.from('kv').upsert({ key, value }, { onConflict: 'key' });
+    if (error) { console.error('fsKvSet failed:', key, error); throw error; }
     return { key, value };
   }
   async function fsKvDelete(key){
-    await window.firestoreReady;
-    await deleteDoc(doc(db, 'kv', key));
+    const { error } = await sb.from('kv').delete().eq('key', key);
+    if (error) { console.error('fsKvDelete failed:', key, error); throw error; }
     return { key, deleted: true };
   }
   async function fsKvList(prefix){
-    await window.firestoreReady;
     const p = prefix || '';
-    const q = query(collection(db, 'kv'), orderBy(documentId()), startAt(p), endAt(p + '\uf8ff'));
-    const snap = await getDocs(q);
-    const keys = [];
-    snap.forEach(d => keys.push(d.id));
-    return { keys };
+    const { data, error } = await sb.from('kv').select('key').like('key', p + '%');
+    if (error) { console.error('fsKvList failed:', prefix, error); throw error; }
+    return { keys: (data || []).map(r => r.key) };
   }
 
   window.firestoreAPI = { fsGetCollection, fsReplaceCollection, fsKvGet, fsKvSet, fsKvDelete, fsKvList };
