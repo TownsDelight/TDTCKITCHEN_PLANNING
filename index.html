@@ -2135,16 +2135,17 @@
           <div id="ingredientRows"></div>
           <button class="add-ingredient-btn" id="addIngredientBtn" type="button">+ Add ingredient</button>
 
-          <p class="section-label" style="margin-top:22px;">COMPONENT RECIPES <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft);">— optional, insert a saved recipe as a sub-component</span></p>
+          <p class="section-label" style="margin-top:22px;">COMPONENT RECIPES <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft);">— optional, insert a saved recipe as a sub-component. Servings match this recipe's yield automatically.</span></p>
           <div class="headcols" style="grid-template-columns:1.6fr 0.9fr 0.9fr 0.9fr 30px;">
             <span>Recipe</span>
-            <span>Pax needed</span>
+            <span>Servings (= yield)</span>
             <span>Cost / pax</span>
             <span>Line cost</span>
             <span></span>
           </div>
           <div id="subRecipeRows"></div>
           <button class="add-ingredient-btn" id="addSubRecipeBtn" type="button">+ Add recipe component</button>
+
 
           <div id="editingBanner" class="editing-banner" style="display:none;">
             Editing <strong id="editingName"></strong> — saving will update this card.
@@ -3161,7 +3162,45 @@ function initApp(){
     return out;
   }
 
-  // After a recipe is saved, any other recipe using it as a component needs
+  // Same as getExpandedIngredients, but merged into one line per unique
+  // ingredient (name+UOM) — used anywhere stock actually has to be checked,
+  // reserved, or deducted, since a component recipe can share an ingredient
+  // with its parent (or with another component) and those must add up.
+  function getMergedIngredients(recipe, multiplier){
+    const merged = {};
+    getExpandedIngredients(recipe, multiplier).forEach(ing=>{
+      const key = ingredientKey(ing.name, ing.uom);
+      if(!merged[key]) merged[key] = { name: ing.name, uom: ing.uom, qty: 0 };
+      merged[key].qty += ing.qty;
+    });
+    return Object.values(merged);
+  }
+
+  // Sectioned view of a recipe's ingredients for display: one section for the
+  // recipe's own ingredients, then one section per component recipe (and,
+  // recursively, its own components) — so a chef or a printed card can see
+  // exactly which ingredients belong to which part, instead of one blended
+  // list. Quantities are scaled by `multiplier` (e.g. batches for production).
+  function getIngredientSections(recipe, multiplier, seen){
+    multiplier = multiplier || 1;
+    seen = seen || new Set();
+    const sections = [];
+    if(!recipe || seen.has(recipe.id)) return sections;
+    seen = new Set(seen); seen.add(recipe.id);
+    sections.push({
+      recipeId: recipe.id, title: recipe.name, category: recipe.category,
+      ingredients: (recipe.ingredients||[]).map(ing=>({ name: ing.name, uom: ing.uom, qty: (ing.qty||0)*multiplier, unitPrice: ing.unitPrice }))
+    });
+    (recipe.subRecipes||[]).forEach(sr=>{
+      const sub = recipes.find(r=>r.id===sr.recipeId);
+      if(!sub || !sub.yieldVal) return;
+      const subMultiplier = multiplier * ((sr.paxNeeded||0) / sub.yieldVal);
+      sections.push(...getIngredientSections(sub, subMultiplier, seen));
+    });
+    return sections;
+  }
+
+
   // its component line (and its own total/cost-per-pax) recomputed, and that
   // can ripple further up the chain — same idea as propagateIngredientPriceChange
   // but for recipe-in-recipe cost, not raw ingredient price.
@@ -3396,7 +3435,7 @@ function initApp(){
       if(excludePlanId && p.id === excludePlanId) return;
       const recipe = recipes.find(r => r.id === p.recipeId);
       if(!recipe) return;
-      (recipe.ingredients || []).forEach(ing=>{
+      getMergedIngredients(recipe, 1).forEach(ing=>{
         if(ingredientKey(ing.name, ing.uom) === ingredientKey(name, uom)){
           total += ing.qty * p.batches;
         }
@@ -3413,7 +3452,7 @@ function initApp(){
 
   function computeAvailability(recipe, batches, excludePlanId){
     const shortages = [];
-    (recipe.ingredients || []).forEach(ing => {
+    getMergedIngredients(recipe, 1).forEach(ing => {
       const required = ing.qty * batches;
       const available = getAvailableStock(ing.name, ing.uom, excludePlanId);
       if(available < required){
@@ -3427,11 +3466,14 @@ function initApp(){
   // remember exactly what was taken (committedIngredients) so it can be put
   // back if the plan is later edited or deleted. opts.force floors at zero
   // instead of refusing (used only when an Admin/Manager manually validates
-  // a plan that never had enough stock to auto-commit).
+  // a plan that never had enough stock to auto-commit). Ingredients coming
+  // from a component recipe are expanded and merged in here too, so a plan
+  // for a recipe with a component actually reserves the component's real
+  // ingredients, not just an abstract "N pax" of it.
   function commitPlanStock(plan, recipe, opts){
     opts = opts || {};
     const committed = [];
-    (recipe.ingredients || []).forEach(ing=>{
+    getMergedIngredients(recipe, 1).forEach(ing=>{
       const key = ingredientKey(ing.name, ing.uom);
       const invItem = inventory.find(i => i.key === key);
       const required = ing.qty * plan.batches;
@@ -4087,17 +4129,14 @@ function initApp(){
         <span class="mini-label">Recipe</span>
         <select class="f-sub-recipe">${subRecipeOptionsHtml(data.recipeId)}</select>
       </div>
-      <div>
-        <span class="mini-label">Pax needed</span>
-        <input type="number" class="f-sub-pax" min="0" step="0.01" placeholder="0" value="${data.paxNeeded ?? ''}">
-      </div>
+      <div class="sub-pax-display line-cost">— pax</div>
       <div class="sub-cost-per-pax line-cost">₱0.00</div>
       <div class="sub-line-cost line-cost">₱0.00</div>
       <button type="button" class="row-remove" title="Remove component">×</button>
     `;
     subRecipeRowsContainer.appendChild(row);
 
-    row.querySelectorAll('input, select').forEach(el=>{
+    row.querySelectorAll('select').forEach(el=>{
       el.addEventListener('input', updateSummary);
     });
     row.querySelector('.row-remove').addEventListener('click', ()=>{
@@ -4110,13 +4149,20 @@ function initApp(){
 
   document.getElementById('addSubRecipeBtn').addEventListener('click', ()=>addSubRecipeRow());
 
+  // A component's "pax needed" is never typed in — it always equals the
+  // master recipe's own yield (pax), so the two are always serving the same
+  // headcount. Reading #recipeYield live here means it recalculates the
+  // instant the master recipe's yield changes, with no separate input to
+  // keep in sync.
   function getSubRecipeRowsData(){
+    const yieldVal = parseFloat(document.getElementById('recipeYield').value) || 0;
     return Array.from(subRecipeRowsContainer.querySelectorAll('.subrecipe-row')).map(row=>{
       const recipeId = row.querySelector('.f-sub-recipe').value;
       const sub = recipes.find(r => r.id === recipeId);
-      const paxNeeded = parseFloat(row.querySelector('.f-sub-pax').value) || 0;
+      const paxNeeded = recipeId ? yieldVal : 0;
       const costPerPax = sub ? (sub.costPerPax || 0) : 0;
       const lineCost = paxNeeded * costPerPax;
+      row.querySelector('.sub-pax-display').textContent = recipeId ? (paxNeeded + ' pax') : '— pax';
       row.querySelector('.sub-cost-per-pax').textContent = PHP(costPerPax);
       row.querySelector('.sub-line-cost').textContent = PHP(lineCost);
       return {
@@ -4514,16 +4560,35 @@ function initApp(){
     viewDetailOverlayEl.style.display = 'none';
   });
 
+  // Renders one or more ingredient sections (own recipe first, then one per
+  // component, recursively) as a run of small tables with a heading each —
+  // shared by the Recipe Card "View" modal, the production plan detail view,
+  // Recipe Manual, and print output, so components never blend into one list.
+  function ingredientSectionsHtml(sections, opts){
+    opts = opts || {};
+    return sections.map((sec, idx) => {
+      const heading = idx === 0 ? (opts.mainLabel || 'INGREDIENTS') : ('COMPONENT: ' + escapeHtml(sec.title).toUpperCase());
+      const headCols = opts.showPrice
+        ? '<tr><th>Ingredient</th><th>Qty</th><th>Unit price</th><th>Line cost</th></tr>'
+        : '<tr><th>Ingredient</th><th>Qty needed</th></tr>';
+      const rows = sec.ingredients.map(ing => {
+        const qtyStr = (ing.qty||0).toLocaleString('en-PH',{maximumFractionDigits:3});
+        const priceCells = opts.showPrice ? `<td>${PHP(ing.unitPrice||0)}</td><td>${PHP((ing.qty||0)*(ing.unitPrice||0))}</td>` : '';
+        return `<tr><td>${escapeHtml(ing.name)}</td><td>${qtyStr} ${escapeHtml(ing.uom)}</td>${priceCells}</tr>`;
+      }).join('') || `<tr><td colspan="${opts.showPrice?4:2}">No ingredients recorded.</td></tr>`;
+      return `
+        <p class="section-label" style="margin-top:${idx===0?0:16}px;">${heading}</p>
+        <table class="access-table">
+          <thead>${headCols}</thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }).join('');
+  }
+
   function viewRecipeDetail(r){
-    const rows = (r.ingredients||[]).map(ing => `
-      <tr>
-        <td>${escapeHtml(ing.name)}</td>
-        <td>${ing.qty} ${escapeHtml(ing.uom)}</td>
-        <td>${PHP(ing.unitPrice)}</td>
-        <td>${PHP(ing.lineCost)}</td>
-      </tr>
-    `).join('');
-    const subRows = (r.subRecipes||[]).map(sr => `
+    const sectionsHtml = ingredientSectionsHtml(getIngredientSections(r, 1), { showPrice: true });
+    const subSummaryRows = (r.subRecipes||[]).map(sr => `
       <tr>
         <td>${escapeHtml(sr.name)}</td>
         <td>${sr.paxNeeded} pax</td>
@@ -4531,41 +4596,31 @@ function initApp(){
         <td>${PHP(sr.lineCost)}</td>
       </tr>
     `).join('');
-    const subSection = (r.subRecipes && r.subRecipes.length) ? `
-      <p class="section-label" style="margin-top:16px;">COMPONENT RECIPES</p>
+    const subSummary = (r.subRecipes && r.subRecipes.length) ? `
+      <p class="section-label" style="margin-top:16px;">COMPONENT RECIPES — SUMMARY</p>
       <table class="access-table">
         <thead><tr><th>Recipe</th><th>Pax needed</th><th>Cost / pax</th><th>Line cost</th></tr></thead>
-        <tbody>${subRows}</tbody>
+        <tbody>${subSummaryRows}</tbody>
       </table>
     ` : '';
     openViewModal(r.name, `
       <p><span class="cat-tag ${catTagClass(r.category)}">${escapeHtml(r.category)}</span> · yield ${r.yieldVal} pax · cost/pax ${PHP(r.costPerPax)}</p>
-      <p class="section-label">INGREDIENTS</p>
-      <table class="access-table">
-        <thead><tr><th>Ingredient</th><th>Qty</th><th>Unit price</th><th>Line cost</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4">No ingredients recorded.</td></tr>'}</tbody>
-      </table>
-      ${subSection}
+      ${sectionsHtml}
+      ${subSummary}
       <p style="margin-top:10px;font-weight:600;">Total cost: ${PHP(r.totalCost)}</p>
     `);
   }
 
   function viewProductionDetail(p){
     const recipe = recipes.find(r => r.id === p.recipeId);
-    const rows = recipe ? (recipe.ingredients||[]).map(ing => `
-      <tr>
-        <td>${escapeHtml(ing.name)}</td>
-        <td>${(ing.qty * p.batches).toLocaleString('en-PH',{maximumFractionDigits:2})} ${escapeHtml(ing.uom)}</td>
-      </tr>
-    `).join('') : '';
+    const sectionsHtml = recipe
+      ? ingredientSectionsHtml(getIngredientSections(recipe, p.batches), { showPrice: false, mainLabel: 'INGREDIENTS NEEDED' })
+      : '<p>Recipe not found.</p>';
     const statusLabel = p.validated ? 'Done' : (p.stockCommitted ? 'Processing (GO)' : 'Hold (NO-GO)');
     openViewModal(p.eventName, `
       <p><span class="cat-tag">${escapeHtml(p.category||'Uncategorized')}</span> · Batch #${escapeHtml(p.batchNumber||'—')} · Status: ${escapeHtml(statusLabel)}</p>
       <p style="font-size:12.5px;color:var(--ink-soft);">Recipe: ${escapeHtml(p.recipeName||'—')} · ${p.pax} pax · ${p.batches} batch${p.batches===1?'':'es'} · batch date ${formatDateDisplay(p.batchDate)}</p>
-      <table class="access-table">
-        <thead><tr><th>Ingredient</th><th>Qty needed</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="2">Recipe not found.</td></tr>'}</tbody>
-      </table>
+      ${sectionsHtml}
       <p style="margin-top:10px;font-weight:600;">Estimated cost: ${PHP(p.estCost)}</p>
     `);
   }
@@ -4708,14 +4763,22 @@ function initApp(){
         const recipe = recipes.find(r => r.id === id);
         if(!recipe) return;
         const usedByPlans = plans.filter(p => p.recipeId === id && !p.validated);
+        const usedAsComponentBy = recipes.filter(r => (r.subRecipes||[]).some(sr => sr.recipeId === id));
         let msg = 'Delete recipe card "' + recipe.name + '" (' + recipe.category + ')? This cannot be undone.';
         if(usedByPlans.length) msg += '\n\n' + usedByPlans.length + ' unfinished production batch(es) use this recipe.';
+        if(usedAsComponentBy.length) msg += '\n\n⚠ Used as a component in: ' + usedAsComponentBy.map(r=>r.name).join(', ') + '. Deleting it will remove its cost and ingredients from ' + (usedAsComponentBy.length===1?'that recipe':'those recipes') + '.';
         if(!window.confirm(msg)) return;
         if(editingId === id){
           exitEditMode();
           resetForm();
         }
         recipes = recipes.filter(r => r.id !== id);
+        usedAsComponentBy.forEach(r=>{
+          r.subRecipes = (r.subRecipes||[]).filter(sr => sr.recipeId !== id);
+          r.totalCost = recipeTotalCost(r);
+          r.costPerPax = r.yieldVal > 0 ? r.totalCost / r.yieldVal : 0;
+          r.updatedAt = new Date().toISOString();
+        });
         await persistRecipes();
         renderRecipeList();
         renderProcurement();
@@ -4896,6 +4959,24 @@ function initApp(){
     return course.replace(/[^a-zA-Z0-9]+/g,'-');
   }
 
+  // Plain-table version of ingredientSectionsHtml, styled for the printable
+  // pop-out documents (printSection) rather than the in-app modal styling.
+  function ingredientSectionsHtmlPrint(sections){
+    return sections.map((sec, idx) => {
+      const heading = idx === 0 ? 'Ingredients' : 'Component: ' + escapeHtml(sec.title);
+      const rows = sec.ingredients.map(ing => `
+        <tr><td>${escapeHtml(ing.name)}</td><td class="num">${(ing.qty||0).toLocaleString('en-PH',{maximumFractionDigits:3})} ${escapeHtml(ing.uom)}</td></tr>
+      `).join('') || '<tr><td colspan="2">No ingredients recorded.</td></tr>';
+      return `
+        <p class="section-label">${heading}</p>
+        <table>
+          <thead><tr><th>Ingredient</th><th class="num">Qty</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }).join('');
+  }
+
   function renderCcpBoard(){
     ccpBoardEl.innerHTML = COURSES.map(course=>{
       const options = recipes.filter(r => r.category === course);
@@ -4939,11 +5020,14 @@ function initApp(){
       <div class="ccp-meta">yield ${recipe.yieldVal} pax · ${PHP(recipe.costPerPax)} / pax</div>
       <button class="print-btn ccp-print-btn" type="button" style="margin:8px 0 2px;">🖨 Print this recipe</button>
       <div class="ccp-ing-list">
-        ${recipe.ingredients.map(ing => `
-          <div class="ccp-ing-row">
-            <span>${escapeHtml(ing.name)}</span>
-            <span>${ing.qty} ${escapeHtml(ing.uom)}</span>
-          </div>
+        ${getIngredientSections(recipe, 1).map((sec, idx) => `
+          ${idx > 0 ? `<p class="section-label" style="margin-top:10px;">COMPONENT: ${escapeHtml(sec.title).toUpperCase()}</p>` : ''}
+          ${sec.ingredients.map(ing => `
+            <div class="ccp-ing-row">
+              <span>${escapeHtml(ing.name)}</span>
+              <span>${(ing.qty||0).toLocaleString('en-PH',{maximumFractionDigits:3})} ${escapeHtml(ing.uom)}</span>
+            </div>
+          `).join('')}
         `).join('')}
       </div>
       <label class="ccp-label">Critical control points</label>
@@ -4978,17 +5062,10 @@ function initApp(){
 
     container.querySelector('.ccp-print-btn').addEventListener('click', ()=>{
       const notes = container.querySelector('.ccp-textarea').value.trim() || 'No critical control points recorded yet.';
-      const ingRows = recipe.ingredients.map(ing => `
-        <tr><td>${escapeHtml(ing.name)}</td><td class="num">${ing.qty} ${escapeHtml(ing.uom)}</td></tr>
-      `).join('');
       printSection(recipe.name + ' — Recipe Manual', `
         <h1>${escapeHtml(recipe.name)}</h1>
         <p class="print-sub">${escapeHtml(recipe.category || course)} · yield ${recipe.yieldVal} pax · ${PHP(recipe.costPerPax)} / pax</p>
-        <p class="section-label">Ingredients</p>
-        <table>
-          <thead><tr><th>Ingredient</th><th class="num">Qty</th></tr></thead>
-          <tbody>${ingRows}</tbody>
-        </table>
+        ${ingredientSectionsHtmlPrint(getIngredientSections(recipe, 1))}
         <p class="section-label">Critical control points</p>
         <div class="ccp-box">${escapeHtml(notes)}</div>
       `);
